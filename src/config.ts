@@ -60,6 +60,14 @@ export const config = {
     timeoutMs: Number(env.LLM_TIMEOUT_MS ?? 12000),
   },
 
+  // Public search of the site: published pages only, each with a public address.
+  site: {
+    enabled: (env.SITE_SEARCH ?? "on") !== "off",
+    searchUrl: env.SITE_SEARCH_URL ?? "https://pismenny.ru/search/",
+    perRun: Number(env.SITE_SEARCH_PER_RUN ?? 2),
+    timeoutMs: Number(env.SITE_SEARCH_TIMEOUT_MS ?? 2500),
+  },
+
   sources: {
     enabled: (env.SOURCES ?? "on") !== "off",
     url: (env.OPENVIKING_URL ?? "http://127.0.0.1:1933").replace(/\/$/, ""),
@@ -69,7 +77,8 @@ export const config = {
     passEntry: env.OPENVIKING_PASS_ENTRY ?? "live-slides/openviking-api-key",
     rootUri: env.OPENVIKING_ROOT_URI ?? "viking://user/presenter/resources/materials",
     // Slides are shown to an audience, so the default is limited to editorial and research
-    // material. Finance, legal, sales, personal and transcripts stay out unless listed here.
+    // material, drafts included. Finance, legal, sales, personal and transcripts stay out
+    // unless listed here.
     scopes: list(env.SOURCE_SCOPES, ["materials", "research"]),
     // Raw chat digests hold other people's messages; they are not material for a public slide.
     exclude: new RegExp(env.SOURCE_EXCLUDE ?? "/digests/raw/"),

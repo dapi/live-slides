@@ -91,4 +91,4 @@ if (config.llm.keyPassEntry && !process.env.LLM_API_KEY) config.llm.apiKey = awa
 session = new Session(broadcast);
 
 console.log(`Живые слайды: http://${server.hostname}:${server.port}`);
-console.log(`Распознавание: ${config.stt.engine} · слайды: ${config.llm.model} · источники: ${config.sources.enabled ? config.sources.scopes.join(", ") : "выключены"}`);
+console.log(`Распознавание: ${config.stt.engine} · слайды: ${config.llm.model} · источники: ${session.status.sources.scopes.join(", ") || "выключены"}`);

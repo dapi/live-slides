@@ -7,6 +7,8 @@ export interface SourceHit {
   title: string;
   /** Canonical origin, e.g. repo://owner/materials/path.md. */
   ref: string;
+  /** Public address, when the material is published. */
+  url?: string;
   repository: string;
   excerpt: string;
 }

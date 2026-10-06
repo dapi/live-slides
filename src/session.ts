@@ -2,6 +2,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { config, type SttEngineName } from "./config";
 import { Director, type Slide, type StepMetric } from "./director";
+import { SiteSearch } from "./site-search";
 import { Sources } from "./sources";
 import { ElevenLabsStt } from "./stt/elevenlabs";
 import type { SttEngine, SttEvents } from "./stt/types";
@@ -22,6 +23,9 @@ export interface Status {
 export type Broadcast = (message: Record<string, unknown>) => void;
 
 const sources = new Sources();
+const site = new SiteSearch();
+/** Where material is looked up, as shown on the page. */
+const places = [...(sources.enabled ? config.sources.scopes : []), ...(site.enabled ? [new URL(config.site.searchUrl).hostname] : [])];
 
 function stamp(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -39,7 +43,7 @@ export function deckMarkdown(slides: Slide[]): string {
     ...(slide.bullets ?? []).map((bullet) => `- ${bullet}${slide.predicted.includes(bullet) ? " _(прогноз, ещё не прозвучало)_" : ""}`),
     ...column(slide.left),
     ...column(slide.right),
-    slide.sources.length ? `\nИсточники: ${slide.sources.map((s) => `${s.title} (${s.ref})`).join("; ")}` : "",
+    slide.sources.length ? `\nИсточники: ${slide.sources.map((s) => `${s.title} (${s.url ?? s.ref})`).join("; ")}` : "",
   ].filter((line) => line !== "").join("\n")).join("\n\n---\n\n") + "\n";
 }
 
@@ -59,9 +63,9 @@ export class Session {
     this.status = {
       stt: { state: "idle", engine: engines.includes(config.stt.engine) ? config.stt.engine : "elevenlabs", engines },
       slides: { state: "idle", model: config.llm.model },
-      sources: { state: sources.enabled ? "idle" : "off", scopes: config.sources.scopes },
+      sources: { state: places.length ? "idle" : "off", scopes: places },
     };
-    this.director = new Director(sources, {
+    this.director = new Director([sources, site], {
       onSlide: (slide, action, index) => {
         this.broadcast({ type: "slide", slide, action, index });
         void this.saveDeck();
@@ -71,7 +75,7 @@ export class Session {
       },
       onStage: (stage, detail) => {
         this.status.slides = { ...this.status.slides, state: stage === "error" ? "error" : stage === "idle" ? "idle" : "working", detail };
-        if (sources.enabled && stage === "sources") this.status.sources = { ...this.status.sources, state: "working", detail: undefined };
+        if (stage === "sources") this.status.sources = { ...this.status.sources, state: "working", detail: undefined };
         this.pushStatus();
       },
       onSources: (found, error) => {

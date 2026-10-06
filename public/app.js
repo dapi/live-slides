@@ -78,7 +78,8 @@ function buildSlide(slide, index, before) {
   }
 
   const foot = root.appendChild(el("footer", "slide-foot"));
-  const names = slide.sources.map((source) => source.title);
+  // A published source is named with its site, so the audience knows where to find it.
+  const names = slide.sources.map((source) => (source.url ? `${source.title} — ${new URL(source.url).hostname}` : source.title));
   foot.append(
     el("span", "slide-sources", names.length ? `${names.length > 1 ? "Источники" : "Источник"}: ${names.join("; ")}` : ""),
     ...(slide.predicted.length ? [el("span", "slide-legend", "пунктир — прогноз, докладчик к этому подходит")] : []),

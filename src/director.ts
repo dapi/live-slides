@@ -1,5 +1,11 @@
 import { config } from "./config";
-import { Sources, type SearchResult, type SourceHit } from "./sources";
+import type { SearchResult, SourceHit } from "./sources";
+
+/** Anything that can be searched for material: the knowledge base, the public site. */
+export interface Source {
+  readonly enabled: boolean;
+  search(query: string): Promise<SearchResult>;
+}
 
 export type Layout = "statement" | "bullets" | "quote" | "number" | "compare";
 
@@ -22,7 +28,7 @@ export interface Slide {
   right?: Column;
   /** Texts on this slide the speaker has not said yet: the forecast of where the talk goes. */
   predicted: string[];
-  sources: { title: string; ref: string }[];
+  sources: { title: string; ref: string; url?: string }[];
   revision: number;
   createdAt: string;
   updatedAt: string;
@@ -202,6 +208,52 @@ function withoutForecast(slide: Slide): Slide {
 }
 
 /**
+ * One source seen from the director: searches ahead of the slide step and never makes it wait.
+ * A slow answer still helps, because the next step finds it among the recent hits.
+ */
+class Feed {
+  private prefetched: { chars: number; result: Promise<SearchResult> } | null = null;
+  private recent: { hits: SourceHit[]; at: number } | null = null;
+
+  constructor(readonly source: Source) {}
+
+  private run(query: string): Promise<SearchResult> {
+    return this.source.search(query).then((found) => {
+      if (!found.error && found.hits.length) this.recent = { hits: found.hits, at: performance.now() };
+      return found;
+    });
+  }
+
+  /** Starts a search while the phrase is still open, once enough new text has been heard. */
+  prefetch(heardChars: number, query: string): void {
+    if (heardChars - (this.prefetched?.chars ?? 0) >= PREFETCH_STEP_CHARS) this.prefetched = { chars: heardChars, result: this.run(query) };
+  }
+
+  /** Hits for a step: a search that saw most of the text, waited for briefly; else the recent ones. */
+  async take(freshChars: number, query: string): Promise<{ hits: SourceHit[]; error?: string }> {
+    const prefetched = this.prefetched;
+    this.prefetched = null;
+    const search = prefetched && prefetched.chars >= freshChars * 0.6 ? prefetched.result : this.run(query);
+    const found = await Promise.race([search, Bun.sleep(SOURCE_WAIT_MS).then(() => null)]);
+    const recent = this.recent && performance.now() - this.recent.at < RECENT_HITS_MS ? this.recent.hits : [];
+    return { hits: found && !found.error && found.hits.length ? found.hits : recent, error: found?.error };
+  }
+}
+
+const sameTitle = (a: string, b: string) => a.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "") === b.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+
+/** Hits of all sources in order; a page found twice keeps the fuller excerpt and the public address. */
+function merge(groups: SourceHit[][]): SourceHit[] {
+  const merged: SourceHit[] = [];
+  for (const hit of groups.flat()) {
+    const twin = merged.find((other) => sameTitle(other.title, hit.title));
+    if (twin) twin.url ??= hit.url;
+    else merged.push({ ...hit });
+  }
+  return merged;
+}
+
+/**
  * Leads the deck: follows the speech and keeps the slide a few seconds ahead of it.
  * One model call at a time; words heard meanwhile go into the next step.
  */
@@ -219,30 +271,22 @@ export class Director {
   private settling = false;
   private failures = 0;
   private blockedUntil = 0;
-  private prefetched: { chars: number; result: Promise<SearchResult> } | null = null;
-  private recent: { hits: SourceHit[]; at: number } | null = null;
+  private feeds: Feed[];
   private timer: ReturnType<typeof setTimeout> | null = null;
   private nextId = 1;
 
-  constructor(private sources: Sources, private events: DirectorEvents) {}
+  constructor(sources: Source[], private events: DirectorEvents) {
+    this.feeds = sources.filter((source) => source.enabled).map((source) => new Feed(source));
+  }
 
   partialText(text: string): void {
     this.partial = text;
     const unprocessed = this.unprocessed();
-    if (this.sources.enabled && unprocessed.length - (this.prefetched?.chars ?? 0) >= PREFETCH_STEP_CHARS) {
-      this.prefetched = { chars: unprocessed.length, result: this.search(this.query(unprocessed)) };
-    }
+    for (const feed of this.feeds) feed.prefetch(unprocessed.length, this.query(unprocessed));
     if (this.openReady() > this.partialTaken) {
       this.pendingSince ||= performance.now();
       this.schedule();
     }
-  }
-
-  private search(query: string): Promise<SearchResult> {
-    return this.sources.search(query).then((found) => {
-      if (!found.error && found.hits.length) this.recent = { hits: found.hits, at: performance.now() };
-      return found;
-    });
   }
 
   /** Everything heard that no slide reflects yet. */
@@ -351,8 +395,6 @@ export class Director {
     if (takeOpen) this.partialTaken = openEnd;
     // The phrase goes on if the recognizer has not closed it yet.
     const stillSpeaking = takeOpen && !flushing;
-    const prefetched = this.prefetched;
-    this.prefetched = null;
 
     const current = this.slides.at(-1);
     let sourcesMs = 0;
@@ -364,17 +406,14 @@ export class Director {
       model: config.llm.model, ...extra,
     });
     try {
-      if (this.sources.enabled) {
+      if (this.feeds.length) {
         this.events.onStage("sources");
-        // A search started while the phrase was still open is good enough if it saw most of it.
         const waitStarted = performance.now();
-        const search = prefetched && prefetched.chars >= fresh.length * 0.6 ? prefetched.result : this.search(this.query(fresh));
-        // The slide does not wait for a slow index: the last excerpts on this topic serve meanwhile.
-        const found = await Promise.race([search, Bun.sleep(SOURCE_WAIT_MS).then(() => null)]);
-        const recent = this.recent && performance.now() - this.recent.at < RECENT_HITS_MS ? this.recent.hits : [];
-        hits = found && !found.error && found.hits.length ? found.hits : recent;
+        const taken = await Promise.all(this.feeds.map((feed) => feed.take(fresh.length, this.query(fresh))));
+        hits = merge(taken.map((found) => found.hits));
         sourcesMs = Math.round(performance.now() - waitStarted);
-        this.events.onSources(hits.length, found === null ? undefined : found.error);
+        // Report trouble only when nothing came back at all.
+        this.events.onSources(hits.length, hits.length ? undefined : taken.find((found) => found.error)?.error);
       }
 
       this.events.onStage("llm");
@@ -488,7 +527,7 @@ export class Director {
 
   /** Sources already credited on the slide that this step's search did not return again. */
   private carried(current: Slide | undefined, hits: SourceHit[]): Slide["sources"] {
-    return (current?.sources ?? []).filter((source) => !hits.some((hit) => hit.ref === source.ref));
+    return (current?.sources ?? []).filter((source) => !hits.some((hit) => hit.ref === source.ref || sameTitle(hit.title, source.title)));
   }
 
   private apply(decision: any, current: Slide | undefined, hits: SourceHit[], force: boolean): Pick<StepMetric, "action" | "sourcesUsed" | "predicted" | "confirmed" | "dropped"> {
@@ -501,10 +540,11 @@ export class Director {
     if (force || !current) action = "new";
 
     // Numbers refer to this step's excerpts followed by the sources carried over from the slide.
-    const citable = [...hits.map((hit) => ({ title: hit.title, ref: hit.ref })), ...this.carried(current, hits)];
+    const citable = [...hits.map((hit) => ({ title: hit.title, ref: hit.ref, url: hit.url })), ...this.carried(current, hits)];
     const cited = (Array.isArray(decision.sources) ? decision.sources : [])
       .map((n: unknown) => citable[Number(n) - 1])
-      .filter((source: unknown, i: number, all: unknown[]) => source && all.indexOf(source) === i) as Slide["sources"];
+      .filter((source: Slide["sources"][number] | undefined, i: number, all: (Slide["sources"][number] | undefined)[]) =>
+        source && all.findIndex((other) => other && sameTitle(other.title, source.title)) === i) as Slide["sources"];
     const now = new Date().toISOString();
     const predicted: string[] = [];
     const layout: Layout = LAYOUTS.includes(raw.layout) ? raw.layout : "bullets";
