@@ -170,6 +170,10 @@ function renderStatus() {
     rows.push(row("", "idle", `${(status.speechToSlideMs / 1000).toFixed(1).replace(".", ",")} с до слайда`));
   }
   $("chain").replaceChildren(...rows);
+  // Only engines this server can run are offered; with a single one there is nothing to choose.
+  for (const option of $("engine").options) option.hidden = option.disabled = !stt.engines.includes(option.value);
+  $("engine").parentElement.hidden = stt.engines.length < 2;
+  if (!stt.engines.includes($("engine").value)) $("engine").value = stt.engine;
 }
 
 function renderListening() {

@@ -19,6 +19,7 @@ const server = Bun.serve({
     if (url.pathname === "/ws") {
       return server.upgrade(request) ? undefined : new Response("WebSocket expected", { status: 400 });
     }
+    if (url.pathname === "/healthz") return new Response("ok");
     if (url.pathname === "/api/health") {
       return Response.json({ ok: true, session: session.id, listening: session.listening, slides: session.slides.length, status: session.status });
     }

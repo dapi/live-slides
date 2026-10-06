@@ -5,12 +5,12 @@ import { Director, type Slide, type StepMetric } from "./director";
 import { Sources } from "./sources";
 import { ElevenLabsStt } from "./stt/elevenlabs";
 import type { SttEngine, SttEvents } from "./stt/types";
-import { WhisperStt } from "./stt/whisper";
+import { WhisperStt, whisperAvailable } from "./stt/whisper";
 
 type Stage = { state: string; detail?: string };
 
 export interface Status {
-  stt: Stage & { engine: SttEngineName };
+  stt: Stage & { engine: SttEngineName; engines: SttEngineName[] };
   slides: Stage & { model: string };
   sources: Stage & { scopes: string[]; found?: number };
   /** Last measured delay from speech to a changed slide. */
@@ -55,8 +55,9 @@ export class Session {
   private dirReady: Promise<unknown> | null = null;
 
   constructor(private broadcast: Broadcast) {
+    const engines: SttEngineName[] = whisperAvailable() ? ["elevenlabs", "whisper"] : ["elevenlabs"];
     this.status = {
-      stt: { state: "idle", engine: config.stt.engine },
+      stt: { state: "idle", engine: engines.includes(config.stt.engine) ? config.stt.engine : "elevenlabs", engines },
       slides: { state: "idle", model: config.llm.model },
       sources: { state: sources.enabled ? "idle" : "off", scopes: config.sources.scopes },
     };
@@ -104,8 +105,9 @@ export class Session {
     this.broadcast({ type: "status", status: this.status });
   }
 
-  async start(engineName: SttEngineName = this.status.stt.engine): Promise<void> {
+  async start(requested: SttEngineName = this.status.stt.engine): Promise<void> {
     if (this.listening) return;
+    const engineName = this.status.stt.engines.includes(requested) ? requested : this.status.stt.engine;
     const events: SttEvents = {
       onPartial: (text) => {
         this.broadcast({ type: "partial", text });
@@ -124,7 +126,7 @@ export class Session {
       },
     };
     this.engine = engineName === "whisper" ? new WhisperStt(events) : new ElevenLabsStt(events);
-    this.status.stt = { state: "connecting", engine: engineName };
+    this.status.stt = { ...this.status.stt, state: "connecting", detail: undefined, engine: engineName };
     this.listening = true;
     this.broadcast({ type: "listening", on: true });
     try {

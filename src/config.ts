@@ -28,6 +28,9 @@ export const config = {
       keyEnv: "ELEVENLABS_API_KEY",
       passEntry: env.ELEVENLABS_PASS_ENTRY ?? "live-slides/elevenlabs-api-key",
       model: env.ELEVENLABS_STT_MODEL ?? "scribe_v2_realtime",
+      // Egress for the ElevenLabs connection where the service is not reachable directly:
+      // socks5://host:port or http://host:port.
+      proxy: env.ELEVENLABS_PROXY,
       // Pause that closes a phrase. Shorter means faster slides, more fragmented phrases.
       silenceSecs: Number(env.ELEVENLABS_SILENCE_SECS ?? 0.7),
     },

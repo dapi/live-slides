@@ -1,8 +1,20 @@
 import { config, secret } from "../config";
+import { startSocksBridge } from "./socks-bridge";
 import type { SttEngine, SttEvents } from "./types";
 
 const ENDPOINT = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const MAX_BUFFERED_CHUNKS = 100; // ~10 s of audio kept while the socket (re)connects
+
+let bridge: Promise<string> | null = null;
+
+/** HTTP proxy URL for the WebSocket, or undefined for a direct connection. */
+function proxyUrl(): Promise<string | undefined> {
+  const proxy = config.stt.elevenlabs.proxy;
+  if (!proxy?.startsWith("socks")) return Promise.resolve(proxy);
+  bridge ??= startSocksBridge(proxy);
+  bridge.catch(() => (bridge = null));
+  return bridge;
+}
 
 /** ElevenLabs Scribe realtime: true streaming recognition, phrases close on pauses. */
 export class ElevenLabsStt implements SttEngine {
@@ -38,7 +50,8 @@ export class ElevenLabsStt implements SttEngine {
       vad_silence_threshold_secs: String(config.stt.elevenlabs.silenceSecs),
     });
     // Bun accepts headers on client WebSockets; the key never reaches the browser.
-    const ws = new WebSocket(`${ENDPOINT}?${query}`, { headers: { "xi-api-key": key } } as any);
+    const proxy = await proxyUrl();
+    const ws = new WebSocket(`${ENDPOINT}?${query}`, { headers: { "xi-api-key": key }, ...(proxy ? { proxy } : {}) } as any);
     this.ws = ws;
 
     ws.onopen = () => {

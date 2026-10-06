@@ -18,6 +18,11 @@ const HALLUCINATION = /^(субтитры|редактор субтитров|п
 let server: { proc: Subprocess; port: number } | null = null;
 let starting: Promise<number> | null = null;
 
+/** The local engine needs the whisper-server binary and the model file on this machine. */
+export function whisperAvailable(): boolean {
+  return Bun.which(config.stt.whisper.bin) !== null && existsSync(config.stt.whisper.model);
+}
+
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const probe = createServer();

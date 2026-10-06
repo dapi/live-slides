@@ -1,0 +1,8 @@
+# Allowlist: the build context may travel to a remote builder.
+**
+!package.json
+!bun.lock
+!src
+!src/**
+!public
+!public/**
