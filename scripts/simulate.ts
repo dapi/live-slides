@@ -7,7 +7,9 @@ const url = urlArg || `ws://127.0.0.1:${process.env.PORT ?? 4747}/ws`;
 if (!file) throw new Error("Usage: bun scripts/simulate.ts talk.wav [ws-url] [engine]");
 
 const pcm = new Uint8Array(await Bun.file(file).arrayBuffer()).subarray(44);
-const ws = new WebSocket(url);
+// SIMULATE_COOKIE carries a session cookie when the server sits behind an authenticating proxy.
+const cookie = process.env.SIMULATE_COOKIE;
+const ws = new WebSocket(url, cookie ? ({ headers: { Cookie: cookie } } as any) : undefined);
 const started = performance.now();
 const at = () => ((performance.now() - started) / 1000).toFixed(1).padStart(5);
 let lastStage = "";
@@ -31,6 +33,11 @@ ws.onmessage = (event) => {
     if (problem && stage !== lastStage) console.log(at(), "ОШИБКА", problem.detail);
     lastStage = stage;
   }
+};
+
+ws.onclose = (event) => {
+  console.log(at(), "соединение закрыто", event.code, event.reason);
+  process.exit(event.code === 1000 ? 0 : 1);
 };
 
 ws.onopen = async () => {

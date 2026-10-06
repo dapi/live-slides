@@ -28,8 +28,11 @@ export const config = {
       keyEnv: "ELEVENLABS_API_KEY",
       passEntry: env.ELEVENLABS_PASS_ENTRY ?? "live-slides/elevenlabs-api-key",
       model: env.ELEVENLABS_STT_MODEL ?? "scribe_v2_realtime",
-      // Egress for the ElevenLabs connection where the service is not reachable directly:
-      // socks5://host:port or http://host:port.
+      // Where ElevenLabs is not reachable directly, the connection can leave in two ways.
+      // 1. Resolve its address through this DNS-over-HTTPS URL. A Control D endpoint whose
+      //    profile redirects the domain answers with a Control D proxy. Tried first.
+      dohUrl: env.ELEVENLABS_DOH_URL,
+      // 2. Go through a proxy: socks5://host:port or http://host:port. Used when 1 is unset.
       proxy: env.ELEVENLABS_PROXY,
       // Pause that closes a phrase. Shorter means faster slides, more fragmented phrases.
       silenceSecs: Number(env.ELEVENLABS_SILENCE_SECS ?? 0.7),

@@ -1,5 +1,5 @@
 import { config, secret } from "../config";
-import { startSocksBridge } from "./socks-bridge";
+import { startDohBridge, startSocksBridge } from "./egress-bridge";
 import type { SttEngine, SttEvents } from "./types";
 
 const ENDPOINT = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
@@ -9,9 +9,9 @@ let bridge: Promise<string> | null = null;
 
 /** HTTP proxy URL for the WebSocket, or undefined for a direct connection. */
 function proxyUrl(): Promise<string | undefined> {
-  const proxy = config.stt.elevenlabs.proxy;
-  if (!proxy?.startsWith("socks")) return Promise.resolve(proxy);
-  bridge ??= startSocksBridge(proxy);
+  const { dohUrl, proxy } = config.stt.elevenlabs;
+  if (!dohUrl && !proxy?.startsWith("socks")) return Promise.resolve(proxy);
+  bridge ??= dohUrl ? startDohBridge(dohUrl) : startSocksBridge(proxy!);
   bridge.catch(() => (bridge = null));
   return bridge;
 }
