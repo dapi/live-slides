@@ -1,0 +1,173 @@
+import { appendFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { config, type SttEngineName } from "./config";
+import { Director, type Slide, type StepMetric } from "./director";
+import { Sources } from "./sources";
+import { ElevenLabsStt } from "./stt/elevenlabs";
+import type { SttEngine, SttEvents } from "./stt/types";
+import { WhisperStt } from "./stt/whisper";
+
+type Stage = { state: string; detail?: string };
+
+export interface Status {
+  stt: Stage & { engine: SttEngineName };
+  slides: Stage & { model: string };
+  sources: Stage & { scopes: string[]; found?: number };
+  /** Last measured delay from speech to a changed slide. */
+  speechToSlideMs?: number;
+  /** The director's current guess about what the speaker says next. */
+  next?: string;
+}
+
+export type Broadcast = (message: Record<string, unknown>) => void;
+
+const sources = new Sources();
+
+function stamp(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+export function deckMarkdown(slides: Slide[]): string {
+  const column = (c?: { title: string; items: string[] }) => (c ? [`**${c.title}**`, ...c.items.map((item) => `- ${item}`), ""] : []);
+  return slides.map((slide) => [
+    `## ${slide.title}`,
+    "",
+    slide.subtitle ?? "",
+    slide.value ? `**${slide.value}** — ${slide.caption ?? ""}` : "",
+    slide.quote ? `> ${slide.quote}${slide.attribution ? `\n> — ${slide.attribution}` : ""}` : "",
+    ...(slide.bullets ?? []).map((bullet) => `- ${bullet}${slide.predicted.includes(bullet) ? " _(прогноз, ещё не прозвучало)_" : ""}`),
+    ...column(slide.left),
+    ...column(slide.right),
+    slide.sources.length ? `\nИсточники: ${slide.sources.map((s) => `${s.title} (${s.ref})`).join("; ")}` : "",
+  ].filter((line) => line !== "").join("\n")).join("\n\n---\n\n") + "\n";
+}
+
+/** One talk: its recognizer, transcript, deck and files on disk. */
+export class Session {
+  readonly id = stamp(new Date());
+  readonly dir = join(config.dataDir, "sessions", this.id);
+  readonly transcript: { id: number; text: string; at: string }[] = [];
+  listening = false;
+  status: Status;
+  private engine: SttEngine | null = null;
+  private director: Director;
+  private dirReady: Promise<unknown> | null = null;
+
+  constructor(private broadcast: Broadcast) {
+    this.status = {
+      stt: { state: "idle", engine: config.stt.engine },
+      slides: { state: "idle", model: config.llm.model },
+      sources: { state: sources.enabled ? "idle" : "off", scopes: config.sources.scopes },
+    };
+    this.director = new Director(sources, {
+      onSlide: (slide, action, index) => {
+        this.broadcast({ type: "slide", slide, action, index });
+        void this.saveDeck();
+      },
+      onNext: (next) => {
+        this.status.next = next || undefined;
+      },
+      onStage: (stage, detail) => {
+        this.status.slides = { ...this.status.slides, state: stage === "error" ? "error" : stage === "idle" ? "idle" : "working", detail };
+        if (sources.enabled && stage === "sources") this.status.sources = { ...this.status.sources, state: "working", detail: undefined };
+        this.pushStatus();
+      },
+      onSources: (found, error) => {
+        this.status.sources = { ...this.status.sources, state: error ? "error" : "idle", detail: error, found };
+        this.pushStatus();
+      },
+      onMetric: (metric: StepMetric) => {
+        if (metric.action === "new" || metric.action === "update") this.status.speechToSlideMs = metric.speechToSlideMs;
+        this.pushStatus();
+        void this.append("metrics.jsonl", metric);
+      },
+    });
+  }
+
+  get slides(): Slide[] {
+    return this.director.slides;
+  }
+
+  snapshot() {
+    return {
+      type: "state",
+      session: this.id,
+      listening: this.listening,
+      slides: this.slides,
+      transcript: this.transcript.slice(-30),
+      status: this.status,
+    };
+  }
+
+  private pushStatus(): void {
+    this.broadcast({ type: "status", status: this.status });
+  }
+
+  async start(engineName: SttEngineName = this.status.stt.engine): Promise<void> {
+    if (this.listening) return;
+    const events: SttEvents = {
+      onPartial: (text) => {
+        this.broadcast({ type: "partial", text });
+        this.director.partialText(text);
+      },
+      onFinal: (text) => {
+        const entry = { id: this.transcript.length + 1, text, at: new Date().toISOString() };
+        this.transcript.push(entry);
+        this.broadcast({ type: "final", ...entry });
+        void this.append("transcript.jsonl", entry);
+        this.director.finalText(text);
+      },
+      onState: (state, detail) => {
+        this.status.stt = { ...this.status.stt, state, detail };
+        this.pushStatus();
+      },
+    };
+    this.engine = engineName === "whisper" ? new WhisperStt(events) : new ElevenLabsStt(events);
+    this.status.stt = { state: "connecting", engine: engineName };
+    this.listening = true;
+    this.broadcast({ type: "listening", on: true });
+    try {
+      await this.engine.start();
+    } catch (error) {
+      this.listening = false;
+      this.engine = null;
+      this.broadcast({ type: "listening", on: false });
+      this.status.stt = { ...this.status.stt, state: "error", detail: this.status.stt.detail ?? (error as Error).message };
+      this.pushStatus();
+    }
+  }
+
+  audio(pcm: Uint8Array): void {
+    if (this.listening) this.engine?.push(pcm);
+  }
+
+  async stop(): Promise<void> {
+    if (!this.listening) return;
+    this.listening = false;
+    this.broadcast({ type: "listening", on: false });
+    await this.engine?.stop();
+    this.engine = null;
+    this.broadcast({ type: "partial", text: "" });
+    this.director.flush();
+  }
+
+  newSlide(): void {
+    this.director.force();
+  }
+
+  private ensureDir(): Promise<unknown> {
+    return (this.dirReady ??= mkdir(this.dir, { recursive: true }));
+  }
+
+  private async append(file: string, record: unknown): Promise<void> {
+    await this.ensureDir();
+    await appendFile(join(this.dir, file), JSON.stringify(record) + "\n");
+  }
+
+  private async saveDeck(): Promise<void> {
+    await this.ensureDir();
+    await Bun.write(join(this.dir, "deck.json"), JSON.stringify({ session: this.id, slides: this.slides }, null, 2));
+    await Bun.write(join(this.dir, "deck.md"), deckMarkdown(this.slides));
+  }
+}

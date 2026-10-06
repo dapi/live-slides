@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Живые слайды</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;500;700;800&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="bar" id="bar">
+    <button class="mic" id="mic" type="button" aria-pressed="false">
+      <span class="mic-level" id="mic-level" aria-hidden="true"></span>
+      <span id="mic-label">Слушать</span>
+    </button>
+    <label class="engine">
+      <span class="visually-hidden">Где распознавать речь</span>
+      <select id="engine">
+        <option value="elevenlabs">ElevenLabs, в облаке</option>
+        <option value="whisper">Whisper, на этом Mac</option>
+      </select>
+    </label>
+    <ul class="chain" id="chain" aria-live="polite"></ul>
+    <div class="bar-actions">
+      <button type="button" id="new-slide" title="Клавиша N">Новый слайд</button>
+      <a id="download" href="/api/deck.md" title="Все слайды сессии в Markdown">Скачать</a>
+      <button type="button" id="reset">Новая сессия</button>
+    </div>
+  </header>
+
+  <main class="room">
+    <nav class="rail" id="rail" aria-label="Слайды"></nav>
+    <section class="stage" id="stage" aria-live="polite"></section>
+  </main>
+
+  <p class="away" id="away" hidden>
+    <span id="away-text"></span>
+    <button type="button" id="back-live">Вернуться к живому слайду</button>
+  </p>
+
+  <footer class="tape" id="tape" aria-label="Распознанная речь">
+    <p class="tape-line"><span id="tape-final"></span><span id="tape-partial"></span></p>
+  </footer>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

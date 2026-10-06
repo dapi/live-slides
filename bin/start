@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Starts the app on this directory's stable port. Extra arguments go to bun (e.g. --watch).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [[ -z "${PORT:-}" ]] && command -v port-selector >/dev/null; then
+  PORT="$(port-selector --name web)"
+fi
+export PORT="${PORT:-4747}"
+
+if curl -fsS -m 2 --noproxy '*' "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
+  echo "Уже запущено: http://127.0.0.1:${PORT}"
+  exit 0
+fi
+
+exec bun "$@" src/server.ts

@@ -1,0 +1,16 @@
+{
+  "name": "live-slides",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bin/start",
+    "dev": "bin/start --watch",
+    "typecheck": "tsc --noEmit",
+    "simulate": "bun scripts/simulate.ts",
+    "bench": "bun scripts/bench-models.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}
