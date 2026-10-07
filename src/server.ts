@@ -69,7 +69,8 @@ const server = Bun.serve({
         case "reset":
           micOwner = null;
           await session.stop();
-          session = new Session(broadcast);
+          session = await Session.resumeLatest(broadcast);
+if (session.slides.length) console.log(`Продолжаю сессию ${session.id}: слайдов ${session.slides.length}`);
           broadcast(session.snapshot());
           break;
       }
@@ -88,7 +89,8 @@ function broadcast(message: Record<string, unknown>): void {
 
 if (config.llm.keyPassEntry && !process.env.LLM_API_KEY) config.llm.apiKey = await secret("LLM_API_KEY", config.llm.keyPassEntry);
 
-session = new Session(broadcast);
+session = await Session.resumeLatest(broadcast);
+if (session.slides.length) console.log(`Продолжаю сессию ${session.id}: слайдов ${session.slides.length}`);
 
 console.log(`Живые слайды: http://${server.hostname}:${server.port}`);
 console.log(`Распознавание: ${config.stt.engine} · слайды: ${config.llm.model} · источники: ${session.status.sources.scopes.join(", ") || "выключены"}`);

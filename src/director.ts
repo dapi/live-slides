@@ -7,7 +7,10 @@ export interface Source {
   search(query: string): Promise<SearchResult>;
 }
 
-export type Layout = "statement" | "bullets" | "quote" | "number" | "compare";
+export type Layout = "statement" | "bullets" | "quote" | "number" | "compare" | "flow" | "cycle" | "layers";
+
+/** Diagram layouts keep their nodes in `bullets`, in order. */
+export const DIAGRAMS: Layout[] = ["flow", "cycle", "layers"];
 
 export interface Column {
   title: string;
@@ -77,7 +80,7 @@ const PREFETCH_STEP_CHARS = 60;
 const COVERED_TAIL_CHARS = 900;
 const SOURCE_WAIT_MS = 900;
 const RECENT_HITS_MS = 25000;
-const LAYOUTS: Layout[] = ["statement", "bullets", "quote", "number", "compare"];
+const LAYOUTS: Layout[] = ["statement", "bullets", "quote", "number", "compare", "flow", "cycle", "layers"];
 
 export const SYSTEM_PROMPT = `Ты — режиссёр живых слайдов. Докладчик говорит, его речь распознаётся на лету, а ты ведёшь колоду на экране. Главное правило: слайд опережает речь. К моменту, когда докладчик дойдёт до мысли, она уже должна быть на экране: зритель видит, куда идёт рассказ, а докладчик получает подсказку.
 
@@ -130,6 +133,11 @@ export const SYSTEM_PROMPT = `Ты — режиссёр живых слайдо�
 - "quote" — дословная цитата из выдержки или яркая формулировка докладчика: quote, attribution, title как тема.
 - "number" — одна ключевая цифра: value (например «70%» или «3 недели»), caption — что она означает, title как тема.
 - "compare" — противопоставление «было и стало», «до и после»: title, left и right, у каждого title и items (до 3, каждый {"text","said"}).
+Схемы — когда структура важнее слов; узел не длиннее 5 слов:
+- "flow" — цепочка: шаги процесса, причина → следствие, путь от А к Б: title, steps (2–5, каждый {"text","said"}).
+- "cycle" — замкнутый цикл, который повторяется: title, steps (3–5, каждый {"text","said"}).
+- "layers" — уровни или слои, от базового к верхнему: title, layers (2–5, каждый {"text","said"}).
+Схема тоже опережает речь: ещё не названные узлы помечай "said": false.
 Для statement, quote и number поле "said" ставится на слайд целиком: false, если его содержание — прогноз.
 
 В "next" одной короткой фразой запиши, о чём докладчик, по-твоему, скажет дальше.
@@ -177,7 +185,7 @@ function forModel(slide: Slide): object {
     layout: slide.layout,
     title: slide.title,
     subtitle: slide.subtitle,
-    bullets: slide.bullets?.length ? mark(slide.bullets) : undefined,
+    [slide.layout === "layers" ? "layers" : DIAGRAMS.includes(slide.layout) ? "steps" : "bullets"]: slide.bullets?.length ? mark(slide.bullets) : undefined,
     quote: slide.quote,
     attribution: slide.attribution,
     value: slide.value,
@@ -277,6 +285,13 @@ export class Director {
 
   constructor(sources: Source[], private events: DirectorEvents) {
     this.feeds = sources.filter((source) => source.enabled).map((source) => new Feed(source));
+  }
+
+  /** Continues an earlier deck, e.g. after a restart: slides as saved, recent speech as context. */
+  load(slides: Slide[], covered: string): void {
+    this.slides.splice(0, this.slides.length, ...slides);
+    this.nextId = Math.max(0, ...slides.map((slide) => slide.id)) + 1;
+    this.covered = covered.slice(-4000);
   }
 
   partialText(text: string): void {
@@ -552,7 +567,7 @@ export class Director {
       layout,
       title,
       subtitle: clip(raw.subtitle, 200) || undefined,
-      bullets: points(raw.bullets, 4, predicted),
+      bullets: points(layout === "layers" ? raw.layers : DIAGRAMS.includes(layout) ? raw.steps : raw.bullets, DIAGRAMS.includes(layout) ? 5 : 4, predicted),
       quote: clip(raw.quote, 400) || undefined,
       attribution: clip(raw.attribution, 120) || undefined,
       value: clip(raw.value, 24) || undefined,

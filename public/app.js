@@ -45,6 +45,44 @@ function list(items, stateOf) {
   return ul;
 }
 
+const SVG = "http://www.w3.org/2000/svg";
+
+function svg(tag, attributes) {
+  const node = document.createElementNS(SVG, tag);
+  for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+  return node;
+}
+
+/** A node of a diagram: a box whose border is dashed until the speaker reaches it. */
+function diagramNode(text, state) {
+  const box = el("div", `node ${state === "ahead" ? "ahead" : ""}`);
+  box.append(words(text, state));
+  return box;
+}
+
+/**
+ * Three diagrams, drawn from the slide's structure: a chain of steps, a loop that returns to
+ * its start, and a stack of layers from the base up.
+ */
+function diagram(slide, stateOf) {
+  const root = el("div", `diagram diagram-${slide.layout}`);
+  const nodes = slide.bullets;
+  if (slide.layout === "layers") {
+    for (const text of [...nodes].reverse()) root.append(diagramNode(text, stateOf(text)));
+    return root;
+  }
+  const row = root.appendChild(el("div", "diagram-row"));
+  nodes.forEach((text, i) => {
+    if (i) row.appendChild(svg("svg", { class: "arrow", viewBox: "0 0 24 24", "aria-hidden": "true" })).append(svg("path", { d: "M2 12h17m-6-6 6 6-6 6" }));
+    row.append(diagramNode(text, stateOf(text)));
+  });
+  if (slide.layout === "cycle") {
+    // The way back from the last node to the first: a line under the row, arrow up at the start.
+    root.appendChild(el("div", "loop")).appendChild(svg("svg", { class: "loop-head", viewBox: "0 0 24 24", "aria-hidden": "true" })).append(svg("path", { d: "M5 15l7-8 7 8" }));
+  }
+  return root;
+}
+
 function buildSlide(slide, index, before) {
   const known = saidTexts(before);
   // Said for the first time gets the marker, including a forecast that has just come true.
@@ -64,6 +102,8 @@ function buildSlide(slide, index, before) {
     root.append(el("p", "slide-topic", slide.title));
     root.appendChild(el("p", "slide-value")).append(words(slide.value, fresh(slide.value) === "ahead" ? "ahead" : ""));
     if (slide.caption) root.appendChild(el("p", "slide-sub")).append(words(slide.caption, fresh(slide.caption)));
+  } else if (["flow", "cycle", "layers"].includes(slide.layout) && slide.bullets?.length) {
+    root.append(title("slide-title"), diagram(slide, fresh));
   } else if (slide.layout === "compare" && slide.left && slide.right) {
     root.append(title("slide-title"));
     const grid = root.appendChild(el("div", "compare"));

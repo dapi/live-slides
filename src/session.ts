@@ -1,7 +1,7 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { config, type SttEngineName } from "./config";
-import { Director, type Slide, type StepMetric } from "./director";
+import { DIAGRAMS, Director, type Slide, type StepMetric } from "./director";
 import { SiteSearch } from "./site-search";
 import { Sources } from "./sources";
 import { ElevenLabsStt } from "./stt/elevenlabs";
@@ -40,7 +40,9 @@ export function deckMarkdown(slides: Slide[]): string {
     slide.subtitle ?? "",
     slide.value ? `**${slide.value}** — ${slide.caption ?? ""}` : "",
     slide.quote ? `> ${slide.quote}${slide.attribution ? `\n> — ${slide.attribution}` : ""}` : "",
-    ...(slide.bullets ?? []).map((bullet) => `- ${bullet}${slide.predicted.includes(bullet) ? " _(прогноз, ещё не прозвучало)_" : ""}`),
+    ...(DIAGRAMS.includes(slide.layout)
+      ? [`Схема (${slide.layout}): ${(slide.bullets ?? []).map((node) => `${node}${slide.predicted.includes(node) ? " (прогноз)" : ""}`).join(slide.layout === "layers" ? " / " : " → ")}${slide.layout === "cycle" ? " → …" : ""}`]
+      : (slide.bullets ?? []).map((bullet) => `- ${bullet}${slide.predicted.includes(bullet) ? " _(прогноз, ещё не прозвучало)_" : ""}`)),
     ...column(slide.left),
     ...column(slide.right),
     slide.sources.length ? `\nИсточники: ${slide.sources.map((s) => `${s.title} (${s.url ?? s.ref})`).join("; ")}` : "",
@@ -48,9 +50,11 @@ export function deckMarkdown(slides: Slide[]): string {
 }
 
 /** One talk: its recognizer, transcript, deck and files on disk. */
+const RESUME_WITHIN_MS = 12 * 60 * 60 * 1000;
+
 export class Session {
-  readonly id = stamp(new Date());
-  readonly dir = join(config.dataDir, "sessions", this.id);
+  readonly id: string;
+  readonly dir: string;
   readonly transcript: { id: number; text: string; at: string }[] = [];
   listening = false;
   status: Status;
@@ -58,7 +62,9 @@ export class Session {
   private director: Director;
   private dirReady: Promise<unknown> | null = null;
 
-  constructor(private broadcast: Broadcast) {
+  constructor(private broadcast: Broadcast, id = stamp(new Date())) {
+    this.id = id;
+    this.dir = join(config.dataDir, "sessions", id);
     const engines: SttEngineName[] = whisperAvailable() ? ["elevenlabs", "whisper"] : ["elevenlabs"];
     this.status = {
       stt: { state: "idle", engine: engines.includes(config.stt.engine) ? config.stt.engine : "elevenlabs", engines },
@@ -92,6 +98,31 @@ export class Session {
 
   get slides(): Slide[] {
     return this.director.slides;
+  }
+
+  /**
+   * After a restart, the deck of the latest recent session comes back on screen instead of an
+   * empty stage; its files keep growing under the same session id.
+   */
+  static async resumeLatest(broadcast: Broadcast): Promise<Session> {
+    const root = join(config.dataDir, "sessions");
+    const ids = await readdir(root).catch(() => [] as string[]);
+    for (const id of ids.sort().reverse()) {
+      const deckFile = Bun.file(join(root, id, "deck.json"));
+      const age = Date.now() - (await stat(join(root, id, "deck.json")).catch(() => null))?.mtimeMs!;
+      if (!(await deckFile.exists()) || !(age < RESUME_WITHIN_MS)) continue;
+      try {
+        const { slides } = (await deckFile.json()) as { slides: Slide[] };
+        const session = new Session(broadcast, id);
+        const lines = (await Bun.file(join(root, id, "transcript.jsonl")).text().catch(() => "")).trim().split("\n").filter(Boolean);
+        session.transcript.push(...lines.map((line) => JSON.parse(line)));
+        session.director.load(slides, session.transcript.slice(-20).map((entry) => entry.text).join(" "));
+        return session;
+      } catch {
+        break;
+      }
+    }
+    return new Session(broadcast);
   }
 
   snapshot() {

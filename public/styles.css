@@ -288,6 +288,54 @@ body.quiet .bar { opacity: 0; pointer-events: none; }
 
 :root[data-theme="dark"] .fresh { animation: stroke 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) forwards, dry 1.2s 6s forwards, marker-ink 7.2s; }
 
+/* Diagrams: boxes and arrows in the slide's own units */
+
+.diagram { max-width: 86cqw; }
+.diagram-row { display: flex; align-items: stretch; gap: 1.2cqw; }
+
+.node {
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-height: 7cqw;
+  padding: 1.4cqw 1.6cqw;
+  border: 0.3cqw solid var(--ink);
+  border-radius: 0.8cqw;
+  font-size: 2.2cqw;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.node.ahead { border-style: dashed; border-color: var(--cobalt); }
+
+.arrow { flex: none; align-self: center; width: 2.6cqw; height: 2.6cqw; fill: none; stroke: var(--cobalt); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+.loop {
+  position: relative;
+  height: 2.6cqw;
+  margin: 0.4cqw 9cqw 0 8cqw;
+  border: 0.3cqw solid var(--cobalt);
+  border-top: 0;
+  border-radius: 0 0 1cqw 1cqw;
+}
+
+.loop-head {
+  position: absolute;
+  left: -1.6cqw;
+  top: -1.6cqw;
+  width: 2.9cqw;
+  height: 2.9cqw;
+  fill: none;
+  stroke: var(--cobalt);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.diagram-layers { display: flex; flex-direction: column; gap: 0.8cqw; width: 60cqw; }
+.diagram-layers .node { min-height: 5.2cqw; justify-content: center; text-align: center; }
+.diagram-layers .node:last-child { border-width: 0.5cqw; }
+
 /* Forecast: where the talk is heading. Lighter and dashed until the speaker gets there. */
 
 .ahead { color: var(--mute); }
@@ -361,6 +409,11 @@ body.quiet .bar { opacity: 0; pointer-events: none; }
 @keyframes rise { from { opacity: 0; transform: translateY(1.2cqw); } }
 @keyframes pulse { 50% { opacity: 0.35; } }
 @keyframes blink { 50% { opacity: 0; } }
+
+/* The "next" hint is the longest item in the bar; on narrower screens it would wrap the bar. */
+@media (max-width: 1560px) {
+  .chain-next { display: none; }
+}
 
 @media (max-width: 720px) {
   .room { padding: 0 12px 0 34px; }
