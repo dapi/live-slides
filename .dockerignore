@@ -8,6 +8,8 @@
 !public/**
 !migrations
 !migrations/**
+!prompts
+!prompts/**
 !scripts
 !scripts/migrate.ts
 !scripts/create-user.ts

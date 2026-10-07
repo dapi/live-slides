@@ -46,6 +46,19 @@
           <button type="submit">Сохранить настройки</button>
         </form>
       </section>
+      <section class="surface talk-section" aria-labelledby="talk-title">
+        <h2 id="talk-title">Речь и режиссёр</h2>
+        <form id="talk-settings" class="stack-form">
+          <label>О выступлении<textarea name="talkBrief" rows="3" placeholder="Тема, аудитория, что важно показать. Например: доклад для врачей, не техническая аудитория, цифры брать из отчёта."></textarea><small class="muted">Добавляется к инструкции режиссёра на это выступление.</small></label>
+          <label>Термины для распознавания<textarea name="speechTerms" rows="2"></textarea><small class="muted">Названия, имена и термины, которые распознаватель должен писать правильно. Пусто — стандартная подсказка.</small></label>
+          <details class="help-details" id="director-details">
+            <summary>Инструкция режиссёра</summary>
+            <label><span class="muted">Полная инструкция модели, которая ведёт слайды. Пусто — стандартная.</span><textarea name="directorPrompt" rows="12" spellcheck="false"></textarea></label>
+            <div class="inline-actions"><button type="button" id="director-fill">Вставить стандартную</button><button type="button" id="director-clear">Вернуть стандартную</button></div>
+          </details>
+          <button type="submit">Сохранить речь и режиссёра</button>
+        </form>
+      </section>
     </div>
     <p id="project-message" role="status" aria-live="polite"></p>
   </main>

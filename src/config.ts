@@ -21,6 +21,8 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env) {
     host: env.HOST ?? "127.0.0.1",
     port: Number(env.PORT ?? 4747),
     dataDir: expand(env.DATA_DIR ?? join(root, "data")),
+    // Prompt texts for the director and the recognizer; another directory replaces them all.
+    promptsDir: expand(env.PROMPTS_DIR ?? join(root, "prompts")),
     language: env.SPEECH_LANGUAGE ?? "ru",
     auth: {
       origin,
@@ -82,8 +84,6 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env) {
         bin: env.WHISPER_SERVER_BIN ?? "whisper-server",
         model: expand(env.WHISPER_MODEL ?? "~/.cache/live-slides/models/ggml-large-v3-turbo.bin"),
         threads: Number(env.WHISPER_THREADS ?? 6),
-        // Terms the recognizer should spell correctly.
-        prompt: env.WHISPER_PROMPT ?? "Агентная разработка, ИИ-агенты, LLM, Claude Code, Codex, OpenViking, тимлид, пайплайн.",
       },
     },
 

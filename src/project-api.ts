@@ -4,14 +4,17 @@ import { canUsePersonal } from './auth';
 import { Database, type Project, type User } from './database';
 import { InputError } from './documents';
 import { Knowledge } from './knowledge';
+import { prompts, TALK_LIMITS, type TalkSettings } from './prompts';
 
 export class ProjectApi {
   constructor(private db: Database, private knowledge: Knowledge, private changeProject = async (_user: User, _project: Project, update: () => Promise<Project>) => update()) {}
   async handle(request: Request, user: User): Promise<Response | null> {
     const url = new URL(request.url);
     if (url.pathname === '/api/me') return json({ name: user.display_name, localAccount: user.subject.startsWith('local:'), personalSourceAvailable: canUsePersonal(user) && config.sources.enabled });
+    // The shipped prompts, so the settings page can show what a presentation starts from.
+    if (url.pathname === '/api/prompts') return json({ director: prompts.director, speechTerms: prompts.speechTerms, limits: TALK_LIMITS });
     if (url.pathname === '/api/projects') {
-      if (request.method === 'GET') return json(await this.db.as(user.id, tx => tx`SELECT p.id, p.name, p.personal_source,
+      if (request.method === 'GET') return json(await this.db.as(user.id, tx => tx`SELECT p.id, p.name, p.personal_source, p.director_prompt, p.talk_brief, p.speech_terms,
         (SELECT count(*)::int FROM documents d WHERE d.project_id = p.id) AS document_count,
         (SELECT count(*)::int FROM documents d WHERE d.project_id = p.id AND d.status = 'ready') AS ready_count
         FROM projects p WHERE p.owner_id = ${user.id} ORDER BY p.created_at`));
@@ -41,8 +44,10 @@ export class ProjectApi {
       if (typeof input.personalSource !== 'boolean') throw new InputError('Выберите источники презентации');
       const personal = input.personalSource;
       if (personal && (!canUsePersonal(user) || !config.sources.enabled)) throw new InputError('Источник недоступен', 403);
+      const talk = talkSettings(input, project);
       return json(await this.changeProject(user, project, () => this.db.as(user.id, async tx =>
-        (await tx`UPDATE projects SET name = ${name}, personal_source = ${personal}
+        (await tx`UPDATE projects SET name = ${name}, personal_source = ${personal},
+          director_prompt = ${talk.director_prompt}, talk_brief = ${talk.talk_brief}, speech_terms = ${talk.speech_terms}
           WHERE id = ${project.id} AND owner_id = ${user.id} RETURNING *`)[0])));
     }
     const route = url.pathname.match(/^\/api\/projects\/([a-f0-9-]{36})\/documents(?:\/([a-f0-9-]{36})\/retry)?$/i);
@@ -72,4 +77,19 @@ export class ProjectApi {
     }
     return new Response('Method not allowed', { status: 405 });
   }
+}
+
+/** The prompt fields of a PATCH: a missing field keeps its value, an empty one returns to the shipped prompt. */
+function talkSettings(input: Record<string, unknown>, current: TalkSettings): TalkSettings {
+  const labels = { director_prompt: 'Инструкция режиссёра', talk_brief: 'Описание выступления', speech_terms: 'Термины для распознавания' } as const;
+  const names = { director_prompt: 'directorPrompt', talk_brief: 'talkBrief', speech_terms: 'speechTerms' } as const;
+  const result = { ...current };
+  for (const key of Object.keys(TALK_LIMITS) as (keyof TalkSettings)[]) {
+    const value = input[names[key]];
+    if (value === undefined) continue;
+    if (typeof value !== 'string') throw new InputError(`${labels[key]}: ожидается текст`);
+    if (value.length > TALK_LIMITS[key]) throw new InputError(`${labels[key]}: не длиннее ${TALK_LIMITS[key]} символов`);
+    result[key] = value.replace(/\r\n/g, '\n').trim();
+  }
+  return result;
 }

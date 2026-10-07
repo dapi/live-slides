@@ -2,6 +2,7 @@ import { appendFile, mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { config, type SttEngineName } from "./config";
 import { DIAGRAMS, Director, type Slide, type StepMetric, type Source } from "./director";
+import { directorPrompt, speechTerms, type TalkSettings } from "./prompts";
 import { SiteSearch } from "./site-search";
 import { Sources } from "./sources";
 import { ElevenLabsStt } from "./stt/elevenlabs";
@@ -24,7 +25,7 @@ export interface Status {
 
 export type Broadcast = (message: Record<string, unknown>) => void;
 
-export interface SessionContext { sources: Source[]; places: string[]; root: string; resumeWithinMs?: number }
+export interface SessionContext { sources: Source[]; places: string[]; root: string; resumeWithinMs?: number; talk?: Partial<TalkSettings> }
 function localContext(): SessionContext {
   const sources = new Sources();
   const site = new SiteSearch();
@@ -67,7 +68,7 @@ export class Session {
   private director: Director;
   private dirReady: Promise<unknown> | null = null;
 
-  constructor(private broadcast: Broadcast, id = stamp(new Date()) + "-" + crypto.randomUUID(), context = localContext()) {
+  constructor(private broadcast: Broadcast, id = stamp(new Date()) + "-" + crypto.randomUUID(), private context = localContext()) {
     this.id = id;
     this.dir = join(context.root, id);
     const engines: SttEngineName[] = whisperAvailable() ? ["elevenlabs", "whisper"] : ["elevenlabs"];
@@ -102,7 +103,7 @@ export class Session {
         this.pushStatus();
         void this.append("metrics.jsonl", metric);
       },
-    });
+    }, directorPrompt(context.talk));
   }
 
   get slides(): Slide[] {
@@ -179,7 +180,7 @@ export class Session {
         this.pushStatus();
       },
     };
-    this.engine = engineName === "whisper" ? new WhisperStt(events) : new ElevenLabsStt(events);
+    this.engine = engineName === "whisper" ? new WhisperStt(events, speechTerms(this.context.talk)) : new ElevenLabsStt(events);
     this.status.stt = { ...this.status.stt, state: "connecting", detail: undefined, engine: engineName };
     this.listening = true;
     this.broadcast({ type: "listening", on: true });

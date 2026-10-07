@@ -5,7 +5,7 @@
 // The step: the speaker announced "three approaches" and named two. One excerpt is his article on
 // exactly this (it gives the third approach), the other is about a neighbouring topic and is a trap.
 import { config } from "../src/config";
-import { SYSTEM_PROMPT } from "../src/director";
+import { prompts } from "../src/prompts";
 
 const models = process.argv.slice(2).length
   ? process.argv.slice(2)
@@ -61,7 +61,7 @@ async function once(model: string) {
       method: "POST",
       signal: AbortSignal.timeout(25000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.llm.apiKey}` },
-      body: JSON.stringify({ model, max_tokens: 700, temperature: config.llm.temperature, ...config.llm.extraBody, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: user }] }),
+      body: JSON.stringify({ model, max_tokens: 700, temperature: config.llm.temperature, ...config.llm.extraBody, messages: [{ role: "system", content: prompts.director }, { role: "user", content: user }] }),
     });
     const ms = Math.round(performance.now() - started);
     if (!response.ok) return { ms, error: `HTTP ${response.status}: ${(await response.text()).slice(0, 120)}` };

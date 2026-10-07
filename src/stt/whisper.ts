@@ -2,6 +2,7 @@ import { createServer } from "node:net";
 import { existsSync } from "node:fs";
 import type { Subprocess } from "bun";
 import { config } from "../config";
+import { prompts } from "../prompts";
 import type { SttEngine, SttEvents } from "./types";
 
 const FRAME_BYTES = 3200; // 100 ms of 16 kHz 16-bit mono
@@ -114,7 +115,8 @@ export class WhisperStt implements SttEngine {
   private busy = false;
   private queue: Promise<void> = Promise.resolve();
 
-  constructor(private events: SttEvents) {}
+  /** The hint biases spelling and style; a presentation may bring its own terms. */
+  constructor(private events: SttEvents, private prompt = prompts.speechTerms) {}
 
   async start(): Promise<void> {
     this.events.onState("connecting", "загружается модель");
@@ -218,7 +220,7 @@ export class WhisperStt implements SttEngine {
     form.append("temperature", "0");
     form.append("response_format", "json");
     form.append("language", config.language);
-    form.append("prompt", config.stt.whisper.prompt);
+    form.append("prompt", this.prompt);
     const response = await fetch(`http://127.0.0.1:${this.port}/inference`, {
       method: "POST",
       body: form,

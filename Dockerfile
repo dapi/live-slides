@@ -22,6 +22,7 @@ COPY public ./public
 COPY scripts/migrate.ts ./scripts/migrate.ts
 COPY scripts/create-user.ts ./scripts/create-user.ts
 COPY migrations ./migrations
+COPY prompts ./prompts
 
 # The app needs no privileges; sessions are written to the mounted /data.
 RUN mkdir -p /data && chown bun:bun /data

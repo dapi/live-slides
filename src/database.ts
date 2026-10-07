@@ -2,7 +2,7 @@ import { SQL } from "bun";
 import { config, secret } from "./config";
 
 export interface User { id: string; subject: string; display_name: string }
-export interface Project { id: string; owner_id: string; name: string; personal_source: boolean }
+export interface Project { id: string; owner_id: string; name: string; personal_source: boolean; director_prompt: string; talk_brief: string; speech_terms: string }
 
 export class Database {
   constructor(readonly sql: SQL) {}

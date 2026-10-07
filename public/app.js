@@ -17,6 +17,7 @@ let projectList = [];
 let documentsTimer;
 let currentView = "projects";
 let personalSourceAvailable = false;
+let shippedPrompts = null; // the defaults from /api/prompts, loaded when the settings page needs them
 let uploadBusy = false;
 let micStarting = false;
 let routeVersion = 0;
@@ -559,6 +560,7 @@ async function navigate(view, id = "", push = true) {
   if (view === "settings") {
     $("project-settings").elements.name.value = project.name;
     $("project-settings").elements.personalSource.checked = project.personal_source;
+    fillTalkSettings(project);
     $("project-source-note").textContent = "Загруженные документы используются только в этой презентации.";
     $("settings-title").focus();
     $("documents-list").replaceChildren(el("li", "muted", "Загружаю документы…"));
@@ -626,6 +628,50 @@ $("project-settings").onsubmit = async event => {
     await api(`/api/projects/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.elements.name.value, personalSource: personalSourceAvailable && form.elements.personalSource.checked }) });
     await loadProjects();
     if (id === activeProject && currentView === "settings") { $("settings-title").textContent = projectList.find(p => p.id === id).name; $("project-message").textContent = "Настройки сохранены."; }
+  } catch (error) { if (id === activeProject) $("project-message").textContent = error.message; }
+  finally { button.disabled = false; }
+};
+function fillTalkSettings(project) {
+  const form = $("talk-settings").elements;
+  form.talkBrief.value = project.talk_brief ?? "";
+  form.speechTerms.value = project.speech_terms ?? "";
+  form.directorPrompt.value = project.director_prompt ?? "";
+  $("director-details").open = Boolean(project.director_prompt);
+  void loadShippedPrompts();
+}
+async function loadShippedPrompts() {
+  try {
+    shippedPrompts ??= await api("/api/prompts");
+    const form = $("talk-settings").elements;
+    form.speechTerms.placeholder = shippedPrompts.speechTerms;
+    form.directorPrompt.placeholder = "Стандартная инструкция режиссёра. Чтобы править, вставьте её кнопкой ниже.";
+    form.speechTerms.maxLength = shippedPrompts.limits.speech_terms;
+    form.talkBrief.maxLength = shippedPrompts.limits.talk_brief;
+    form.directorPrompt.maxLength = shippedPrompts.limits.director_prompt;
+  } catch { /* the form works without placeholders */ }
+}
+$("director-fill").onclick = () => {
+  const field = $("talk-settings").elements.directorPrompt;
+  if (field.value.trim() && !confirm("Заменить текущую инструкцию стандартной?")) return;
+  field.value = shippedPrompts?.director ?? ""; field.focus();
+};
+$("director-clear").onclick = () => {
+  const field = $("talk-settings").elements.directorPrompt;
+  if (field.value.trim() && !confirm("Убрать свою инструкцию? Режиссёр вернётся к стандартной после сохранения.")) return;
+  field.value = "";
+};
+$("talk-settings").onsubmit = async event => {
+  event.preventDefault();
+  const id = activeProject;
+  const form = event.target; const button = form.querySelector('button[type="submit"]'); button.disabled = true;
+  try {
+    await api(`/api/projects/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+      name: $("project-settings").elements.name.value,
+      personalSource: personalSourceAvailable && $("project-settings").elements.personalSource.checked,
+      talkBrief: form.elements.talkBrief.value, speechTerms: form.elements.speechTerms.value, directorPrompt: form.elements.directorPrompt.value,
+    }) });
+    await loadProjects();
+    if (id === activeProject && currentView === "settings") { fillTalkSettings(projectList.find(p => p.id === id)); $("project-message").textContent = "Речь и режиссёр сохранены. Действует со следующего подключения к выступлению."; }
   } catch (error) { if (id === activeProject) $("project-message").textContent = error.message; }
   finally { button.disabled = false; }
 };

@@ -59,7 +59,7 @@ direnv exec . bin/start
 
 | Назначение | Переменные |
 |---|---|
-| Приложение | `HOST`, `PORT`, `APP_ORIGIN`, `DATA_DIR` |
+| Приложение | `HOST`, `PORT`, `APP_ORIGIN`, `DATA_DIR`, `PROMPTS_DIR` |
 | База документов и аккаунтов | `DATABASE_PASS_ENTRY` → `DATABASE_URL`, `DATABASE_HOST` |
 | Слайды | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_KEY_PASS_ENTRY` → `LLM_API_KEY` |
 | Векторы | `EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_KEY_PASS_ENTRY` → `EMBEDDING_API_KEY` |
@@ -69,6 +69,14 @@ direnv exec . bin/start
 | Публичная страница | `PUBLIC_SITE_URL`, `PUBLIC_AUTHOR_*`, `PUBLIC_INTRO_*` |
 | Заявки на ранний доступ → Sales CRM (Twenty) | `TWENTY_API_URL`, `TWENTY_API_KEY_PASS_ENTRY` → `TWENTY_API_KEY`, `CRM_SOURCE_SYSTEM`, `CRM_PRODUCT_TIER` |
 | Образ и CDN | `APP_IMAGE_REPOSITORY`, `PUBLIC_SITE_MEDIA_CDN_*` |
+
+Промпты режиссёра и подсказка распознавателю лежат в [`prompts/`](prompts/):
+`director.md` — системный промпт, `paths.md` — добавка режима вариантов,
+`speech-terms.txt` — термины и стиль речи для Whisper. `PROMPTS_DIR` подменяет
+папку целиком при развёртывании. Презентация может переопределить свою
+инструкцию режиссёра и термины и добавить описание выступления (поля
+`director_prompt`, `talk_brief`, `speech_terms`, миграция 004); пустое поле —
+стандартный текст.
 
 Заявки с публичной страницы хранятся в таблице `waitlist_requests` (миграция
 003) и уходят в Sales CRM как intake lead по контракту `sales-intake/v1`;

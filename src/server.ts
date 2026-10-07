@@ -19,6 +19,7 @@ const PAGES: Record<string, string> = { '/': 'landing.html', '/app': 'index.html
 const db = await Database.open();
 await db.sql`SELECT id FROM projects LIMIT 0`;
 await db.sql`SELECT has_pending_documents, username FROM app_users LIMIT 0`;
+await db.sql`SELECT director_prompt, talk_brief, speech_terms FROM projects LIMIT 0`;
 const auth = new Auth(db);
 const knowledge = new Knowledge(db);
 const api = new ProjectApi(db, knowledge, changeProject);
@@ -58,6 +59,7 @@ async function roomFor(user: User, project: Project): Promise<Room> {
         resumeWithinMs: Infinity,
         sources: [knowledge.source(user.id, project.id), ...(personal ? [new Sources(), new SiteSearch()] : [])],
         places: ['Документы презентации', ...(personal ? config.sources.scopes : [])],
+        talk: project,
       };
       const room = { key, context, mic: null, busy: false, sockets: new Set() } as Room;
       room.session = await Session.resumeLatest(message => broadcast(room, message), context);
