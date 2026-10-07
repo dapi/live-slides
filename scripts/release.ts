@@ -49,7 +49,7 @@ if (existing.ok) throw new Error('Образ этой версии уже опу
 if (!/manifest unknown|not found|no such manifest/i.test(existing.stderr)) throw new Error('Не удалось подтвердить отсутствие образа в registry; сборка остановлена');
 // Export only the reviewed tag and allowlisted app files. No data/, credentials, or
 // unrelated uncommitted workspace changes can reach the remote builder.
-const archive = Bun.spawn(['git', 'archive', '--format=tar', revision, 'Dockerfile', '.dockerignore', 'package.json', 'bun.lock', 'src', 'public', 'migrations', 'scripts/migrate.ts', 'scripts/create-user.ts'], { cwd: root, stdout: 'pipe', stderr: 'ignore' });
+const archive = Bun.spawn(['git', 'archive', '--format=tar', revision, 'Dockerfile', '.dockerignore', 'package.json', 'bun.lock', 'src', 'public', 'migrations', 'prompts', 'scripts/migrate.ts', 'scripts/create-user.ts'], { cwd: root, stdout: 'pipe', stderr: 'ignore' });
 const build = Bun.spawn(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--push', '--build-arg', `APP_VERSION=${version}`, '--build-arg', `APP_REVISION=${revision}`, '-t', image, '-'], { cwd: root, stdin: archive.stdout, stdout: 'inherit', stderr: 'inherit' });
 const [archived, built] = await Promise.all([archive.exited, build.exited]);
 if (archived !== 0 || built !== 0) throw new Error('Сборка или публикация не завершены');
