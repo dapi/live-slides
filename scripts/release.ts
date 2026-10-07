@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { bumpVersion } from './bump-version';
 
 const root = join(import.meta.dir, '..');
-const registry = 'registry.example.org/live-slides';
+const registry = process.env.APP_IMAGE_REPOSITORY;
 async function capture(command: string[]): Promise<{ ok: boolean; stdout: string; stderr: string }> {
   const process = Bun.spawn(command, { cwd: root, stdout: 'pipe', stderr: 'pipe' });
   const [stdout, stderr, code] = await Promise.all([new Response(process.stdout).text(), new Response(process.stderr).text(), process.exited]);
@@ -42,6 +42,7 @@ if (mode === 'tag') {
   process.exit(0);
 }
 if (!local.ok || remoteCommit !== revision) throw new Error('Сначала опубликуйте тег через bun run release:tag');
+if (!registry || !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(registry) || registry.split('/').at(-1)?.includes(':')) throw new Error('Задайте APP_IMAGE_REPOSITORY без тега и credentials');
 const image = `${registry}:${version}`;
 const existing = await capture(['docker', 'buildx', 'imagetools', 'inspect', image]);
 if (existing.ok) throw new Error('Образ этой версии уже опубликован. Используйте его для деплоя; для другого кода повысьте версию');
@@ -52,4 +53,4 @@ const archive = Bun.spawn(['git', 'archive', '--format=tar', revision, 'Dockerfi
 const build = Bun.spawn(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--push', '--build-arg', `APP_VERSION=${version}`, '--build-arg', `APP_REVISION=${revision}`, '-t', image, '-'], { cwd: root, stdin: archive.stdout, stdout: 'inherit', stderr: 'inherit' });
 const [archived, built] = await Promise.all([archive.exited, build.exited]);
 if (archived !== 0 || built !== 0) throw new Error('Сборка или публикация не завершены');
-console.log(`Образ ${image} опубликован. Разверните его средствами своего окружения.`);
+console.log(`Образ ${image} опубликован. Разверните тег ${version} через канонический infrastructure runbook вашего окружения.`);

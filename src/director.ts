@@ -515,10 +515,11 @@ export class Director {
 
     const signal = AbortSignal.timeout(config.llm.timeoutMs);
     const request = async () => {
+      if (!config.llm.model) throw new Error('Настройте LLM_MODEL');
       const response = await fetch(`${config.llm.baseUrl}/chat/completions`, {
         method: "POST",
         signal,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.llm.apiKey}` },
+        headers: { "Content-Type": "application/json", ...(config.llm.apiKey ? { Authorization: `Bearer ${config.llm.apiKey}` } : {}) },
         body: JSON.stringify({
           model: config.llm.model,
           max_tokens: this.variants ? 1100 : 700,

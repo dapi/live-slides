@@ -1,14 +1,18 @@
 import { createHash } from 'node:crypto';
-import { config } from './config';
+import { config, secret } from './config';
 import { Database, type Project, type User } from './database';
 import { chunks, extractDocument, InputError, validateDocument } from './documents';
 import type { SearchResult } from './sources';
 
 export type Embeddings = (texts: string[], signal?: AbortSignal) => Promise<number[][]>;
 export const embed: Embeddings = async (texts, signal = AbortSignal.timeout(30_000)) => {
+  if (!config.knowledge.embeddingModel) throw new Error('Configure EMBEDDING_MODEL');
+  const key = config.knowledge.embeddingKeyPassEntry
+    ? await secret('EMBEDDING_API_KEY', config.knowledge.embeddingKeyPassEntry)
+    : process.env.EMBEDDING_API_KEY ?? config.llm.apiKey;
   const response = await fetch(config.knowledge.embeddingUrl + '/embeddings', {
     method: 'POST', signal, redirect: 'error',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.EMBEDDING_API_KEY ?? 'local'}` },
+    headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
     body: JSON.stringify({ model: config.knowledge.embeddingModel, input: texts, dimensions: config.knowledge.dimensions }),
   });
   if (!response.ok) throw new Error('Embedding service unavailable');

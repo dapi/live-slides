@@ -2,7 +2,6 @@ import { config, secret } from "../config";
 import { startDohBridge, startSocksBridge } from "./egress-bridge";
 import type { SttEngine, SttEvents } from "./types";
 
-const ENDPOINT = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const MAX_BUFFERED_CHUNKS = 100; // ~10 s of audio kept while the socket (re)connects
 
 let bridge: Promise<string> | null = null;
@@ -51,7 +50,7 @@ export class ElevenLabsStt implements SttEngine {
     });
     // Bun accepts headers on client WebSockets; the key never reaches the browser.
     const proxy = await proxyUrl();
-    const ws = new WebSocket(`${ENDPOINT}?${query}`, { headers: { "xi-api-key": key }, ...(proxy ? { proxy } : {}) } as any);
+    const ws = new WebSocket(`${config.stt.elevenlabs.endpoint}?${query}`, { headers: { "xi-api-key": key }, ...(proxy ? { proxy } : {}) } as any);
     this.ws = ws;
 
     ws.onopen = () => {

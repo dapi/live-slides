@@ -2,4 +2,8 @@ node_modules/
 data/
 .env
 .env.local
+.env.*
+!.env.example
+.envrc.local
+.gitleaks-report*
 *.log

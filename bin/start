@@ -8,7 +8,7 @@ if [[ -z "${PORT:-}" ]] && command -v port-selector >/dev/null; then
 fi
 export PORT="${PORT:-4747}"
 
-if curl -fsS -m 2 --noproxy '*' "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
+if curl -fsS -m 2 --noproxy '*' "http://127.0.0.1:${PORT}/healthz" >/dev/null 2>&1; then
   echo "Уже запущено: http://127.0.0.1:${PORT}"
   exit 0
 fi

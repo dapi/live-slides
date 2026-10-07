@@ -25,14 +25,14 @@ const STALE_SEARCH_MS = 1500;
 const SOURCE_COMMENT = /<!--\s*source-metadata\s+(\{.*?\})\s*-->/s;
 const COPY_NOTICE = /^Поисковая копия документа\..*$/m;
 
-/** Retrieval from the shared OpenViking index of Danil's repositories. */
+/** Retrieval from an explicitly configured OpenViking index. */
 export class Sources {
   private key: Promise<string> | null = null;
   private fragments = new Map<string, Promise<string>>();
   private running: { started: number; done: boolean; result: Promise<SearchResult> }[] = [];
 
   get enabled(): boolean {
-    return config.sources.enabled && config.sources.scopes.length > 0;
+    return !!(config.sources.enabled && config.sources.url && config.sources.rootUri && config.sources.user && config.sources.scopes.length > 0);
   }
 
   private async request(method: "GET" | "POST", path: string, body?: unknown, signal?: AbortSignal): Promise<any> {

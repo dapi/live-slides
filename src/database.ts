@@ -21,6 +21,7 @@ export class Database {
   as<T>(userId: string, work: (tx: SQL) => Promise<T>): Promise<T> {
     return this.sql.begin(async tx => {
       await tx`SELECT set_config('app.user_id', ${userId}, true)`;
+      await tx`SELECT set_config('app.personal_source_subject', ${config.auth.ownerSubject.startsWith('corp:') ? config.auth.ownerSubject : ''}, true)`;
       return work(tx as SQL);
     }) as Promise<T>;
   }

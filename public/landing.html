@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Живые слайды — слайды по речи докладчика</title>
   <meta name="description" content="Вы говорите — слайды собираются сами и опережают речь. Распознавание в реальном времени, прогноз мысли и материалы из ваших собственных текстов.">
-  <link rel="canonical" href="https://live-slides.pismenny.ru/">
+  <link rel="canonical" href="{{PUBLIC_SITE_URL}}/">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Живые слайды">
   <meta property="og:description" content="Вы говорите — слайды собираются сами и опережают речь. Открыт ранний доступ.">
-  <meta property="og:url" content="https://live-slides.pismenny.ru/">
-  <meta property="og:image" content="https://live-slides.pismenny.ru/og.png">
+  <meta property="og:url" content="{{PUBLIC_SITE_URL}}/">
+  <meta property="og:image" content="{{PUBLIC_SITE_URL}}/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Слайд, который собирается по речи: два пункта сказаны, третий — прогноз">
@@ -44,15 +44,15 @@
         </p>
       </div>
 
-      <figure class="circle" id="circle">
+      <figure class="circle" id="circle" {{PUBLIC_VIDEO_HIDDEN}}>
         <button class="circle-button" id="circle-button" type="button" aria-label="Включить звук">
-          <video id="circle-video" src="/media/intro.mp4" poster="/media/intro.jpg" playsinline muted loop preload="metadata" width="300" height="300"></video>
+          <video id="circle-video" src="{{PUBLIC_INTRO_VIDEO_URL}}" poster="{{PUBLIC_INTRO_POSTER_URL}}" playsinline muted loop preload="metadata" width="300" height="300"></video>
           <span class="circle-sound" id="circle-sound" aria-hidden="true">
             <svg viewBox="0 0 24 24" class="sound-off"><path d="M4 9v6h4l5 4V5L8 9H4zm12.5 3 2.5-2.5-1.4-1.4L15 10.6l-2.6-2.5L11 9.5l2.6 2.5L11 14.5l1.4 1.4 2.6-2.5 2.6 2.5 1.4-1.4z"/></svg>
             <svg viewBox="0 0 24 24" class="sound-on"><path d="M4 9v6h4l5 4V5L8 9H4zm11 3a3 3 0 0 0-1.7-2.7v5.4A3 3 0 0 0 15 12zm-1.7-7v2.1A5 5 0 0 1 17 12a5 5 0 0 1-3.7 4.9V19a7 7 0 0 0 0-14z"/></svg>
           </span>
         </button>
-        <figcaption>Данил Письменный, 53 секунды о том, зачем это</figcaption>
+        <figcaption>{{PUBLIC_AUTHOR_NAME}} · О том, зачем нужны живые слайды</figcaption>
       </figure>
 
       <figure class="demo" aria-label="Как выглядит слайд, который собирается во время речи">
@@ -122,7 +122,7 @@
   </main>
 
   <footer class="foot">
-    <a href="https://pismenny.ru">Данил Письменный, pismenny.ru</a>
+    <a href="{{PUBLIC_AUTHOR_URL}}" {{PUBLIC_AUTHOR_HIDDEN}}>{{PUBLIC_AUTHOR_NAME}}</a>
     <a href="/app/">Вход для автора</a>
   </footer>
 

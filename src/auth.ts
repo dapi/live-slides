@@ -21,18 +21,18 @@ export class Auth {
 
   /** Explicit Corp sign-in exchanges a verified identity for an app-owned session. */
   async corpLogin(request: Request): Promise<Response> {
-    if (!config.auth.corpVerifyUrl) throw new InputError('Этот способ входа недоступен', 404);
+    if (!corpAvailable()) throw new InputError('Этот способ входа недоступен', 404);
     const cookies = request.headers.get('cookie') ?? '';
-    const response = cookies ? await fetch(config.auth.corpVerifyUrl, {
+    const response = cookies ? await fetch(config.auth.corpVerifyUrl!, {
       headers: { cookie: cookies }, redirect: 'error', signal: AbortSignal.timeout(2500),
     }).catch(() => null) : null;
-    if (response?.ok && response.headers.get('x-auth-request-user') !== 'danil') return Response.redirect(new URL('/login?error=corp', config.auth.origin), 303);
+    if (response?.ok && response.headers.get('x-auth-request-user') !== config.auth.corpOwnerUser) return Response.redirect(new URL('/login?error=corp', config.auth.origin), 303);
     if (!response?.ok) {
-      const target = new URL('https://auth.example.org/login');
+      const target = new URL(config.auth.corpLoginUrl);
       target.searchParams.set('return_to', config.auth.origin + '/auth/corp');
       return Response.redirect(target, 303);
     }
-    const user = await this.db.user('corp:owner', 'Владелец');
+    const user = await this.db.user(config.auth.ownerSubject, config.auth.ownerName);
     const token = await this.issue(this.db.sql, user.id);
     return new Response(null, { status: 303, headers: { Location: '/app/', 'Set-Cookie': this.cookie(token, AGE), 'Cache-Control': 'no-store' } });
   }
@@ -114,5 +114,9 @@ export function sameOrigin(request: Request): boolean {
 export function canUsePersonal(user: User): boolean {
   // The verified owner's stable identity survives creation of app credentials. A matching
   // display name or username never gives another account access to the private connector.
-  return user.subject === 'corp:owner' && user.subject === config.auth.ownerSubject;
+  return config.auth.ownerSubject.startsWith('corp:') && user.subject === config.auth.ownerSubject;
+}
+export function corpAvailable(): boolean {
+  return !!(config.auth.corpVerifyUrl && config.auth.corpLoginUrl && config.auth.corpOwnerUser
+    && config.auth.ownerSubject === `corp:${config.auth.corpOwnerUser}`);
 }

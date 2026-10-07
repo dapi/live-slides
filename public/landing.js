@@ -84,7 +84,7 @@ const circle = $("circle");
 const video = $("circle-video");
 const circleButton = $("circle-button");
 
-if (!reduced) video.play().catch(() => {});
+if (!reduced && video.getAttribute("src")) video.play().catch(() => {});
 
 circleButton.addEventListener("click", () => {
   const sound = !circle.classList.contains("sound");

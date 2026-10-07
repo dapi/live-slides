@@ -6,7 +6,7 @@ const decode = (html: string) =>
   html.replace(/<[^>]+>/g, "").replace(/&(#39|[a-z]+);/g, (whole, name) => ENTITIES[name] ?? whole).replace(/\s+/g, " ").trim();
 
 /**
- * The public search of pismenny.ru: hybrid text and vector search over everything published
+ * The configured public search: hybrid text and vector search over everything published
  * on the site. Without an owner session it returns public pages only, so every hit is safe
  * to show and comes with a public address.
  */
@@ -14,7 +14,7 @@ export class SiteSearch {
   private inFlight: Promise<SearchResult> | null = null;
 
   get enabled(): boolean {
-    return config.site.enabled;
+    return config.site.enabled && !!config.site.searchUrl;
   }
 
   /** One request at a time; a call made meanwhile shares it. The site allows 60 a minute. */

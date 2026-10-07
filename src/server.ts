@@ -3,7 +3,7 @@ import { release } from './version';
 import { join, normalize } from 'node:path';
 import type { ServerWebSocket } from 'bun';
 import { config, secret } from './config';
-import { Auth, canUsePersonal, sameOrigin } from './auth';
+import { Auth, canUsePersonal, corpAvailable, sameOrigin } from './auth';
 import { Database, type Project, type User } from './database';
 import { InputError } from './documents';
 import { Knowledge } from './knowledge';
@@ -12,6 +12,7 @@ import { deckMarkdown, Session, type SessionContext } from './session';
 import { Sources } from './sources';
 import { SiteSearch } from './site-search';
 import { Waitlist } from './waitlist';
+import { renderLanding } from './pages';
 
 const PUBLIC = join(config.root, 'public');
 const PAGES: Record<string, string> = { '/': 'landing.html', '/app': 'index.html', '/app/': 'index.html', '/login': 'login.html' };
@@ -92,7 +93,7 @@ export const server = Bun.serve<SocketData>({
     try {
       const url = new URL(request.url);
       if (url.pathname === '/auth/corp' && request.method === 'GET') return await auth.corpLogin(request);
-      if (url.pathname === '/api/auth/options' && request.method === 'GET') return json({ corpAvailable: !!config.auth.corpVerifyUrl });
+      if (url.pathname === '/api/auth/options' && request.method === 'GET') return json({ corpAvailable: corpAvailable() });
       if (url.pathname === '/healthz') return new Response('ok', { headers: { 'X-App-Version': release.version } });
       if (url.pathname === '/version' && request.method === 'GET') return json(release);
       if (url.pathname === '/waitlist' && request.method === 'POST') return joinWaitlist(request, server.requestIP(request)?.address ?? '');
@@ -155,6 +156,9 @@ export const server = Bun.serve<SocketData>({
       const path = normalize(join(PUBLIC, PAGES[url.pathname] ?? url.pathname));
       if (!path.startsWith(PUBLIC + '/')) return new Response('Not found', { status: 404 });
       const file = Bun.file(path);
+      if (path === join(PUBLIC, 'landing.html')) return new Response(renderLanding(await file.text()), {
+        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+      });
       // Pages and scripts change with every release; media and icons may sit in a cache for a day.
       const cache = /\.(mp4|jpg|png|svg)$/.test(path) ? 'public, max-age=86400' : 'no-store';
       return await file.exists() ? new Response(file, { headers: { 'Cache-Control': cache } }) : new Response('Not found', { status: 404 });

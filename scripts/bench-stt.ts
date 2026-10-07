@@ -29,8 +29,8 @@ async function stream(pcm: Uint8Array, bytesPerMs: number, send: (chunk: Uint8Ar
 
 const elevenlabs: Run = async (pcm, mark, started) => {
   const key = await secret(config.stt.elevenlabs.keyEnv, config.stt.elevenlabs.passEntry);
-  const query = new URLSearchParams({ model_id: "scribe_v2_realtime", language_code: "ru", audio_format: "pcm_16000", commit_strategy: "vad", vad_silence_threshold_secs: "0.7" });
-  const ws = new WebSocket(`wss://api.elevenlabs.io/v1/speech-to-text/realtime?${query}`, { headers: { "xi-api-key": key } } as any);
+  const query = new URLSearchParams({ model_id: config.stt.elevenlabs.model, language_code: config.language, audio_format: "pcm_16000", commit_strategy: "vad", vad_silence_threshold_secs: String(config.stt.elevenlabs.silenceSecs) });
+  const ws = new WebSocket(`${config.stt.elevenlabs.endpoint}?${query}`, { headers: { "xi-api-key": key } } as any);
   ws.onmessage = (event) => {
     const message = JSON.parse(String(event.data));
     if (message.message_type === "partial_transcript") mark({ text: message.text, final: false });
@@ -45,11 +45,11 @@ const elevenlabs: Run = async (pcm, mark, started) => {
 
 function openai(model: string, delay?: string): Run {
   return async (pcm16k, mark, started) => {
-    const key = await secret("OPENAI_API_KEY", "openai-key");
+    const key = await secret("OPENAI_API_KEY", process.env.OPENAI_PASS_ENTRY);
     // The Realtime API takes 24 kHz PCM.
     void pcm16k;
     const pcm = new Uint8Array(await $`ffmpeg -loglevel error -i ${wavPath} -f s16le -ar 24000 -ac 1 pipe:1`.quiet().arrayBuffer());
-    const ws = new WebSocket("wss://api.openai.com/v1/realtime?intent=transcription", { headers: { Authorization: `Bearer ${key}` } } as any);
+    const ws = new WebSocket(process.env.OPENAI_REALTIME_URL ?? "wss://api.openai.com/v1/realtime?intent=transcription", { headers: { Authorization: `Bearer ${key}` } } as any);
     const open: Record<string, string> = {};
     let failed: string | null = null;
     ws.onmessage = (event) => {
@@ -71,7 +71,7 @@ function openai(model: string, delay?: string): Run {
         type: "transcription",
         audio: { input: {
           format: { type: "audio/pcm", rate: 24000 },
-          transcription: { model, ...(delay ? { delay, languages: ["ru"] } : { language: "ru" }) },
+          transcription: { model, ...(delay ? { delay, languages: [config.language] } : { language: config.language }) },
           turn_detection: null, // these models stream one continuous text; phrases are closed by commit
         } },
       },
@@ -108,7 +108,7 @@ const percentile = (sorted: number[], p: number) => sorted[Math.min(sorted.lengt
 const seconds = (ms: number) => (ms / 1000).toFixed(2).replace(".", ",");
 
 // Reference: when each word ends in the audio.
-const timed = await $`whisper-cli -m ${config.stt.whisper.model} -l ru -ml 1 -sow -f ${wavPath}`.quiet().text();
+const timed = await $`whisper-cli -m ${config.stt.whisper.model} -l ${config.language} -ml 1 -sow -f ${wavPath}`.quiet().text();
 const wordEnds = [...timed.matchAll(/-->\s*(\d+):(\d+):(\d+)\.(\d+)\]\s+(\S.*)$/gm)]
   .filter((m) => words(m[5]).length > 0)
   .map((m) => ((+m[1] * 60 + +m[2]) * 60 + +m[3]) * 1000 + +m[4]);

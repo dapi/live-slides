@@ -338,3 +338,5 @@ input:focus, textarea:focus { outline: none; border-color: var(--cobalt); box-sh
   html { scroll-behavior: auto; }
   .demo.live #demo-partial::after { animation: none; }
 }
+
+#circle[hidden] { display: none; }

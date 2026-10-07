@@ -64,7 +64,9 @@ suite('PostgreSQL isolation and durable document pipeline', () => {
         next: '', sources: [1] }) } }] });
     } });
     const previous = config.llm.baseUrl;
+    const previousModel = config.llm.model;
     config.llm.baseUrl = `http://127.0.0.1:${mock.port}`;
+    config.llm.model = 'synthetic-model';
     try {
       const ready = Promise.withResolvers<Slide>();
       const director = new Director([knowledge.source(a.id, p1.id)], {
@@ -75,7 +77,7 @@ suite('PostgreSQL isolation and durable document pipeline', () => {
       expect(prompt).toContain('ordinary project knowledge');
       expect(slide.sources[0]?.title).toBe('first.txt');
       expect(slide.sources[0]?.ref).toStartWith(`project://${p1.id}/`);
-    } finally { config.llm.baseUrl = previous; mock.stop(true); }
+    } finally { config.llm.baseUrl = previous; config.llm.model = previousModel; mock.stop(true); }
   });
   test('failed indexing publishes no partial chunks and can be retried', async () => {
     const doc = await knowledge.upload(a, p2, 'retry.txt', new TextEncoder().encode('retry knowledge'));
@@ -101,13 +103,13 @@ suite('PostgreSQL isolation and durable document pipeline', () => {
     await expect(api.handle(new Request('http://test/api/projects/' + p1.id + '/documents'), b)).rejects.toMatchObject({ status: 404 });
     await expect(api.handle(new Request('http://test/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'forged connector', personalSource: true }) }), a)).rejects.toMatchObject({ status: 403 });
     await expect(db.as(a.id, tx => tx`INSERT INTO projects(owner_id, name, personal_source) VALUES (${a.id}, 'forged connector', true)`)).rejects.toThrow();
-    expect(canUsePersonal({ ...a, subject: 'local:owner' })).toBe(false);
+    expect(canUsePersonal({ ...a, subject: 'local:presenter' })).toBe(false);
     const data = await (await api.handle(new Request('http://test/api/me'), a))!.json();
     expect(data.personalSourceAvailable).toBe(false);
     expect(JSON.stringify(data)).not.toContain(config.sources.url);
   });
   test('forged identity header is not authentication', async () => {
-    expect(await new Auth(db).resolve(new Request('http://test/api/me', { headers: { 'x-auth-request-user': 'danil' } }))).toBeNull();
+    expect(await new Auth(db).resolve(new Request('http://test/api/me', { headers: { 'x-auth-request-user': 'presenter' } }))).toBeNull();
     expect(sameOrigin(new Request(config.auth.origin + '/api/projects', { headers: { Origin: 'https://attacker.test' } }))).toBe(false);
   });
   test('tenant-scoped session resume never loads another project deck', async () => {

@@ -64,7 +64,8 @@ ALTER TABLE document_chunks FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS own_projects ON projects;
 CREATE POLICY own_projects ON projects USING (owner_id::text = current_setting('app.user_id', true))
   WITH CHECK (owner_id::text = current_setting('app.user_id', true)
-    AND (NOT personal_source OR EXISTS (SELECT 1 FROM app_users WHERE id = owner_id AND subject = 'corp:owner')));
+    AND (NOT personal_source OR EXISTS (SELECT 1 FROM app_users WHERE id = owner_id
+      AND subject LIKE 'corp:%' AND subject = current_setting('app.personal_source_subject', true))));
 DROP POLICY IF EXISTS own_documents ON documents;
 CREATE POLICY own_documents ON documents USING (owner_id::text = current_setting('app.user_id', true))
   WITH CHECK (owner_id::text = current_setting('app.user_id', true));

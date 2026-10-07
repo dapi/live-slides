@@ -3,8 +3,8 @@
 set -euo pipefail
 
 model_path="${WHISPER_MODEL:-$HOME/.cache/live-slides/models/ggml-large-v3-turbo.bin}"
-model_url="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin"
-expected_sha1="4af2b29d7ec73d781377bfd1758ca957a807e941"
+model_url="${WHISPER_MODEL_URL:-https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin}"
+expected_sha1="${WHISPER_MODEL_SHA1:-4af2b29d7ec73d781377bfd1758ca957a807e941}"
 
 mkdir -p "$(dirname "$model_path")"
 if [[ ! -s "$model_path" ]] || [[ "$(shasum "$model_path" | awk '{print $1}')" != "$expected_sha1" ]]; then

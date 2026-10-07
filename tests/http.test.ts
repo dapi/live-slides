@@ -10,6 +10,8 @@ suite('HTTP and WebSocket tenant boundary', () => {
   const origin = `http://127.0.0.1:${Bun.env.TEST_APP_PORT}`;
   const mockOrigin = `http://127.0.0.1:${Bun.env.TEST_MOCK_PORT}`;
   const suffix = crypto.randomUUID();
+  const ownerUser = 'presenter-' + suffix;
+  const ownerSubject = 'corp:' + ownerUser;
   const credentials = crypto.randomUUID();
   const createdUsers: string[] = [];
   const sockets: WebSocket[] = [];
@@ -26,7 +28,7 @@ suite('HTTP and WebSocket tenant boundary', () => {
     db = await Database.open();
     mock = Bun.serve({ hostname: '127.0.0.1', port: Number(Bun.env.TEST_MOCK_PORT), fetch(req) {
       if (new URL(req.url).pathname === '/auth/verify') return new Response('', { status: req.headers.get('cookie') === 'synthetic-corp=verified' ? 204 : 401,
-        headers: { 'x-auth-request-user': 'danil' } });
+        headers: { 'x-auth-request-user': ownerUser } });
       return Response.json({ data: [] });
     } });
     for (const login of ['alice', 'bob']) {
@@ -35,7 +37,9 @@ suite('HTTP and WebSocket tenant boundary', () => {
       createdUsers.push(user.id);
     }
     process = Bun.spawn(['bun', 'src/server.ts'], { env: { ...Bun.env, PORT: Bun.env.TEST_APP_PORT, APP_ORIGIN: origin,
-      CORP_VERIFY_URL: mockOrigin + '/auth/verify', LLM_BASE_URL: mockOrigin, OPENVIKING_URL: mockOrigin, EMBEDDING_BASE_URL: mockOrigin,
+      CORP_VERIFY_URL: mockOrigin + '/auth/verify', CORP_LOGIN_URL: mockOrigin + '/login', CORP_OWNER_USER: ownerUser,
+      PERSONAL_SOURCE_SUBJECT: ownerSubject, SOURCE_SCOPES: 'test-materials',
+      LLM_BASE_URL: mockOrigin, OPENVIKING_URL: mockOrigin, EMBEDDING_BASE_URL: mockOrigin,
       DATA_DIR: config.dataDir + '/http-tests-' + suffix }, stdout: 'ignore', stderr: 'ignore' });
     for (let i = 0; i < 100; i++) {
       if (await fetch(origin + '/healthz').then(r => r.ok).catch(() => false)) break;
@@ -61,7 +65,7 @@ suite('HTTP and WebSocket tenant boundary', () => {
   });
   test('authentication, CSRF, forged user headers, foreign project APIs', async () => {
     expect((await request('/api/projects')).status).toBe(401);
-    expect((await fetch(origin + '/api/projects', { headers: { 'x-auth-request-user': 'danil' } })).status).toBe(401);
+    expect((await fetch(origin + '/api/projects', { headers: { 'x-auth-request-user': ownerUser } })).status).toBe(401);
     expect((await fetch(origin + '/api/projects', { method: 'POST', headers: { Cookie: cookieA, Origin: 'https://attacker.test' } })).status).toBe(403);
     expect((await request('/api/projects/' + a + '/documents', cookieB)).status).toBe(404);
     expect((await request('/api/deck.md?project=' + a, cookieB)).status).toBe(404);
@@ -125,8 +129,9 @@ suite('HTTP and WebSocket tenant boundary', () => {
     expect((await (await request('/api/profile', bridgeCookie)).json()).name).toBe('Custom owner name');
     expect((await request('/api/auth/logout', bridgeCookie, 'POST')).status).toBe(200);
     expect((await request('/api/projects', bridgeCookie + '; synthetic-corp=verified')).status).toBe(401);
-    const [owner] = await db.sql`SELECT id FROM app_users WHERE subject = 'corp:owner'`;
+    const [owner] = await db.sql`SELECT id FROM app_users WHERE subject = ${ownerSubject}`;
     await db.as(owner.id, tx => tx`DELETE FROM projects WHERE id = ${project.id}`);
+    createdUsers.push(owner.id);
   });
   test('WebSocket rooms never broadcast to other accounts', async () => {
     const sa = await socket(a, cookieA), sb = await socket(b, cookieB);
