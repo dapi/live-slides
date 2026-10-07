@@ -22,8 +22,23 @@ export interface SearchResult {
 
 const EXCERPT_CHARS = 1400;
 const STALE_SEARCH_MS = 1500;
-const SOURCE_COMMENT = /<!--\s*source-metadata\s+(\{.*?\})\s*-->/s;
 const COPY_NOTICE = /^Поисковая копия документа\..*$/m;
+
+function sourceComment(): RegExp {
+  const marker = config.sources.metadataMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`<!--\\s*${marker}\\s+(\\{.*?\\})\\s*-->`, 's');
+}
+
+/** Optional provenance for any index; unwrapped Markdown needs no metadata. */
+export function sourceMetadata(raw: string): { source?: string; repository?: string } {
+  try {
+    const parsed = JSON.parse(raw.match(sourceComment())?.[1] ?? '{}');
+    return {
+      ...(typeof parsed?.source === 'string' ? { source: parsed.source } : {}),
+      ...(typeof parsed?.repository === 'string' ? { repository: parsed.repository } : {}),
+    };
+  } catch { return {}; }
+}
 
 /** Retrieval from an explicitly configured OpenViking index. */
 export class Sources {
@@ -116,10 +131,7 @@ export class Sources {
   }
 
   private async toHit(uri: string, score: number, raw: string, query: string, signal: AbortSignal): Promise<SourceHit> {
-    let meta: { source?: string; repository?: string } = {};
-    try {
-      meta = JSON.parse(raw.match(SOURCE_COMMENT)?.[1] ?? "{}");
-    } catch {}
+    const meta = sourceMetadata(raw);
     const ref = meta.source ?? uri;
     return {
       uri,
@@ -127,7 +139,7 @@ export class Sources {
       ref,
       repository: meta.repository ?? "",
       title: await this.title(uri, ref, signal),
-      excerpt: bestWindow(body(raw), query),
+      excerpt: bestWindow(sourceBody(raw), query),
     };
   }
 
@@ -135,7 +147,7 @@ export class Sources {
   private async title(uri: string, ref: string, signal: AbortSignal): Promise<string> {
     const fileName = (ref.split("/").pop() ?? ref).replace(/\.(md|txt)$/, "");
     try {
-      const first = body(await this.read(uri.replace(/part-\d+\.md$/, "part-0001.md"), signal));
+      const first = sourceBody(await this.read(uri.replace(/part-\d+\.md$/, "part-0001.md"), signal));
       const own = first.match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1] ?? first.match(/^#\s+(.+)$/m)?.[1];
       return own?.trim().slice(0, 120) || fileName;
     } catch {
@@ -145,8 +157,11 @@ export class Sources {
 }
 
 /** Fragment text without the search-copy wrapper: file-name heading, notice and origin comment. */
-function body(raw: string): string {
-  return raw.replace(SOURCE_COMMENT, "").replace(/^#\s+.+\n/, "").replace(COPY_NOTICE, "").replace(/\n{3,}/g, "\n\n").trim();
+export function sourceBody(raw: string): string {
+  const comment = sourceComment();
+  const wrapped = comment.test(raw) || COPY_NOTICE.test(raw);
+  const content = wrapped ? raw.replace(comment, '').replace(/^#\s+.+\n/, '').replace(COPY_NOTICE, '') : raw;
+  return content.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /** The part of a fragment that shares the most word stems with the query. */

@@ -12,7 +12,7 @@ readonly BUCKET="${PUBLIC_SITE_MEDIA_CDN_BUCKET:?Set PUBLIC_SITE_MEDIA_CDN_BUCKE
 readonly CDN="${PUBLIC_SITE_MEDIA_CDN_URL:?Set PUBLIC_SITE_MEDIA_CDN_URL}"
 readonly PREFIX="${PUBLIC_SITE_MEDIA_CDN_PREFIX:?Set PUBLIC_SITE_MEDIA_CDN_PREFIX}"
 
-# The AWS CLI ships its own CA list, which rejects the chain seen from the office: use the system one.
+# Use the system CA bundle when available; AWS_CA_BUNDLE may override it.
 export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION="$REGION" AWS_PAGER=""
 [[ -n "${AWS_CA_BUNDLE:-}" || ! -f /etc/ssl/cert.pem ]] || export AWS_CA_BUNDLE=/etc/ssl/cert.pem
 [[ -n "${AWS_ACCESS_KEY_ID:-}" ]] || AWS_ACCESS_KEY_ID=$(pass show "${MEDIA_ACCESS_KEY_PASS_ENTRY:?Set MEDIA_ACCESS_KEY_PASS_ENTRY}" | sed -n 1p)

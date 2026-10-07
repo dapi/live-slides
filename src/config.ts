@@ -106,6 +106,7 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env) {
       keyEnv: "OPENVIKING_API_KEY",
       passEntry: env.OPENVIKING_PASS_ENTRY,
       rootUri: env.OPENVIKING_ROOT_URI ?? "",
+      metadataMarker: env.SOURCE_METADATA_MARKER ?? "source-metadata",
       // Slides are shown to an audience. No repository is searched until explicitly listed.
       scopes: list(env.SOURCE_SCOPES, []),
       // Raw chat digests hold other people's messages; they are not material for a public slide.
