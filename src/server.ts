@@ -22,7 +22,7 @@ await db.sql`SELECT has_pending_documents, username FROM app_users LIMIT 0`;
 const auth = new Auth(db);
 const knowledge = new Knowledge(db);
 const api = new ProjectApi(db, knowledge, changeProject);
-const waitlist = await Waitlist.open();
+const waitlist = await Waitlist.open(db);
 if (config.llm.keyPassEntry && !process.env.LLM_API_KEY) config.llm.apiKey = await secret('LLM_API_KEY', config.llm.keyPassEntry);
 
 type SocketData = { user: User; project: Project; room: Room; request: Request; checkedAt: number; expiresAt: number; timer?: ReturnType<typeof setInterval> };
@@ -69,8 +69,8 @@ async function roomFor(user: User, project: Project): Promise<Room> {
   }
   return pending;
 }
-function snapshot(room: Room, user: User) {
-  return { ...room.session.snapshot(), waitlist: canUsePersonal(user) ? waitlist.count : 0 };
+async function snapshot(room: Room, user: User) {
+  return { ...room.session.snapshot(), waitlist: canUsePersonal(user) ? await waitlist.count() : 0 };
 }
 function broadcast(room: Room, message: Record<string, unknown>) {
   for (const ws of room.sockets) {
@@ -136,7 +136,7 @@ export const server = Bun.serve<SocketData>({
         }
         if (url.pathname === '/api/waitlist') {
           if (!canUsePersonal(user)) throw new InputError('Недоступно', 403);
-          return json(waitlist.list());
+          return json(await waitlist.list());
         }
         const result = await api.handle(request, user);
         if (result) return result;
@@ -171,9 +171,9 @@ export const server = Bun.serve<SocketData>({
   },
   websocket: {
     maxPayloadLength: 65536,
-    open(ws) {
+    async open(ws) {
       ws.data.room.sockets.add(ws);
-      ws.send(JSON.stringify(snapshot(ws.data.room, ws.data.user)));
+      ws.send(JSON.stringify(await snapshot(ws.data.room, ws.data.user)));
       // View-only tabs must also lose access when their login expires or is revoked.
       ws.data.timer = setInterval(async () => {
         const current = await auth.resolve(ws.data.request).catch(() => null);
@@ -210,7 +210,7 @@ export const server = Bun.serve<SocketData>({
             room.mic = null; await room.session.stop();
             room.session = new Session(message => broadcast(room, message), undefined, room.context);
             await room.session.activate();
-            broadcast(room, snapshot(room, ws.data.user)); break;
+            broadcast(room, await snapshot(room, ws.data.user)); break;
         }
       } finally { room.busy = false; }
     },

@@ -38,6 +38,15 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env) {
       introVideoUrl: env.PUBLIC_INTRO_VIDEO_URL ?? "",
       introPosterUrl: env.PUBLIC_INTRO_POSTER_URL ?? "",
     },
+    // Early-access requests go to the Sales CRM (Twenty) under the shared intake contract;
+    // without an address or a key they stay in the database only.
+    crm: {
+      url: (env.TWENTY_API_URL ?? "").replace(/\/$/, ""),
+      keyEnv: "TWENTY_API_KEY",
+      keyPassEntry: env.TWENTY_API_KEY_PASS_ENTRY,
+      sourceSystem: env.CRM_SOURCE_SYSTEM ?? "live-slides",
+      productTier: env.CRM_PRODUCT_TIER ?? "LIVE-SLIDES-EARLY-ACCESS",
+    },
     knowledge: {
       databasePassEntry: env.DATABASE_PASS_ENTRY,
       embeddingUrl: (env.EMBEDDING_BASE_URL ?? env.LLM_BASE_URL ?? "http://127.0.0.1:4000/v1").replace(/\/$/, ""),

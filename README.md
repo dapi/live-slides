@@ -67,7 +67,14 @@ direnv exec . bin/start
 | Личная память | `PERSONAL_SOURCE_SUBJECT`, `OPENVIKING_*`, `SOURCE_SCOPES` |
 | Дополнительный вход | `CORP_VERIFY_URL`, `CORP_LOGIN_URL`, `CORP_OWNER_USER` |
 | Публичная страница | `PUBLIC_SITE_URL`, `PUBLIC_AUTHOR_*`, `PUBLIC_INTRO_*` |
+| Заявки на ранний доступ → Sales CRM (Twenty) | `TWENTY_API_URL`, `TWENTY_API_KEY_PASS_ENTRY` → `TWENTY_API_KEY`, `CRM_SOURCE_SYSTEM`, `CRM_PRODUCT_TIER` |
 | Образ и CDN | `APP_IMAGE_REPOSITORY`, `PUBLIC_SITE_MEDIA_CDN_*` |
+
+Заявки с публичной страницы хранятся в таблице `waitlist_requests` (миграция
+003) и уходят в Sales CRM как intake lead по контракту `sales-intake/v1`;
+недоставленные повторяются каждые пять минут, посетитель ошибок CRM не видит.
+Без `TWENTY_API_URL` и ключа заявки остаются только в базе. Файл
+`waitlist.jsonl` прежних версий переносится в базу при первом запуске.
 
 Не записывайте секреты в `.env.local`, Git, документацию или CLI-аргументы.
 В контейнере значения передаются через secret-механизм вашей инфраструктуры.
