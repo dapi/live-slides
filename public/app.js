@@ -476,6 +476,7 @@ async function initProjects() {
     renderAccount(me.name);
     personalSourceAvailable = me.personalSourceAvailable;
     $("personal-source-label").hidden = !personalSourceAvailable;
+    void fetch("/version").then(response => response.json()).then(release => { $("app-version").textContent = `Живые слайды · v${release.version}`; }).catch(() => {});
     await loadProjects();
     await restoreRoute();
   } catch (error) { $("projects-message").textContent = error.message; }

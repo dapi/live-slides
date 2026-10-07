@@ -1,5 +1,6 @@
 {
   "name": "live-slides",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,7 +8,11 @@
     "dev": "bin/start --watch",
     "typecheck": "tsc --noEmit",
     "simulate": "bun scripts/simulate.ts",
-    "bench": "bun scripts/bench-models.ts"
+    "bench": "bun scripts/bench-models.ts",
+    "version:bump": "bun scripts/bump-version.ts",
+    "release:check": "bun scripts/release.ts check",
+    "release:tag": "bun scripts/release.ts tag",
+    "release:build": "bun scripts/release.ts build"
   },
   "devDependencies": {
     "@types/bun": "latest",

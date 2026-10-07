@@ -1,4 +1,5 @@
 import { json } from './http';
+import { release } from './version';
 import { join, normalize } from 'node:path';
 import type { ServerWebSocket } from 'bun';
 import { config, secret } from './config';
@@ -92,7 +93,8 @@ export const server = Bun.serve<SocketData>({
       const url = new URL(request.url);
       if (url.pathname === '/auth/corp' && request.method === 'GET') return await auth.corpLogin(request);
       if (url.pathname === '/api/auth/options' && request.method === 'GET') return json({ corpAvailable: !!config.auth.corpVerifyUrl });
-      if (url.pathname === '/healthz') return new Response('ok');
+      if (url.pathname === '/healthz') return new Response('ok', { headers: { 'X-App-Version': release.version } });
+      if (url.pathname === '/version' && request.method === 'GET') return json(release);
       if (url.pathname === '/waitlist' && request.method === 'POST') return joinWaitlist(request, server.requestIP(request)?.address ?? '');
       if (url.pathname === '/api/auth/login' && request.method === 'POST') {
         if (!sameOrigin(request)) throw new InputError('Недопустимый источник запроса', 403);

@@ -5,6 +5,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils tesseract-ocr tesseract-ocr-rus tesseract-ocr-eng antiword \
     && rm -rf /var/lib/apt/lists/*
 
+ARG APP_VERSION=dev
+ARG APP_REVISION=unknown
+LABEL org.opencontainers.image.version=$APP_VERSION \
+      org.opencontainers.image.revision=$APP_REVISION
+ENV APP_REVISION=$APP_REVISION
+
 WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080 DATA_DIR=/data
 
