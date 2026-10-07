@@ -3,8 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Живые слайды</title>
-  <meta name="description" content="Вы говорите — слайды собираются сами и опережают речь. Распознавание в реальном времени, прогноз мысли и ваши собственные материалы.">
+  <title>Живые слайды — слайды по речи докладчика</title>
+  <meta name="description" content="Вы говорите — слайды собираются сами и опережают речь. Распознавание в реальном времени, прогноз мысли и материалы из ваших собственных текстов.">
+  <link rel="canonical" href="https://live-slides.pismenny.ru/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Живые слайды">
+  <meta property="og:description" content="Вы говорите — слайды собираются сами и опережают речь. Открыт ранний доступ.">
+  <meta property="og:url" content="https://live-slides.pismenny.ru/">
+  <meta property="og:image" content="https://live-slides.pismenny.ru/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Слайд, который собирается по речи: два пункта сказаны, третий — прогноз">
+  <meta property="og:locale" content="ru_RU">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;500;700;800&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13,18 +26,34 @@
 </head>
 <body>
   <header class="top">
-    <a class="wordmark" href="/">Живые слайды</a>
-    <a class="enter" href="/app/">Войти</a>
+    <a class="wordmark" href="/"><img src="/favicon.svg" alt="" width="28" height="28">Живые слайды</a>
+    <a class="cta cta-small" href="#access">Ранний доступ</a>
   </header>
 
   <main>
     <section class="hero">
-      <h1>Слайды появляются раньше, чем вы договорите.</h1>
-      <p class="lead">
-        Вы говорите в микрофон. Сервис распознаёт речь на ходу, понимает, куда идёт мысль,
-        и к моменту, когда вы к ней подходите, слайд уже на экране — с цифрами и формулировками
-        из ваших собственных текстов.
-      </p>
+      <div class="hero-text">
+        <h1>Слайды появляются раньше, чем вы договорите.</h1>
+        <p class="lead">
+          Вы говорите в микрофон, а слайд уже на экране: сервис распознаёт речь на ходу,
+          понимает, куда идёт мысль, и готовит слайд заранее — из ваших же текстов.
+        </p>
+        <p class="hero-actions">
+          <a class="cta" href="#access">Оставить заявку</a>
+          <a class="more" href="#how">Как это работает</a>
+        </p>
+      </div>
+
+      <figure class="circle" id="circle">
+        <button class="circle-button" id="circle-button" type="button" aria-label="Включить звук">
+          <video id="circle-video" src="/media/intro.mp4" poster="/media/intro.jpg" playsinline muted loop preload="metadata" width="300" height="300"></video>
+          <span class="circle-sound" id="circle-sound" aria-hidden="true">
+            <svg viewBox="0 0 24 24" class="sound-off"><path d="M4 9v6h4l5 4V5L8 9H4zm12.5 3 2.5-2.5-1.4-1.4L15 10.6l-2.6-2.5L11 9.5l2.6 2.5L11 14.5l1.4 1.4 2.6-2.5 2.6 2.5 1.4-1.4z"/></svg>
+            <svg viewBox="0 0 24 24" class="sound-on"><path d="M4 9v6h4l5 4V5L8 9H4zm11 3a3 3 0 0 0-1.7-2.7v5.4A3 3 0 0 0 15 12zm-1.7-7v2.1A5 5 0 0 1 17 12a5 5 0 0 1-3.7 4.9V19a7 7 0 0 0 0-14z"/></svg>
+          </span>
+        </button>
+        <figcaption>Данил Письменный, 53 секунды о том, зачем это</figcaption>
+      </figure>
 
       <figure class="demo" aria-label="Как выглядит слайд, который собирается во время речи">
         <div class="sheet" id="sheet">
@@ -46,7 +75,7 @@
       </figure>
     </section>
 
-    <section class="how">
+    <section class="how" id="how">
       <div>
         <h2>Слышит сразу</h2>
         <p>Слово появляется на экране через полсекунды после того, как вы его произнесли. Пауза закрывает фразу, и она уходит в ленту речи под слайдом.</p>
@@ -64,31 +93,31 @@
     <section class="access" id="access">
       <h2>Ранний доступ</h2>
       <p>
-        Сейчас сервис работает для одного докладчика — автора. Я собираю тех, кому он нужен:
-        напишу, когда можно будет подключиться по подписке, и позову попробовать первыми.
+        Пока сервисом пользуюсь только я. Собираю тех, кому он нужен: напишу, когда можно
+        будет подключиться по подписке, и позову попробовать первыми.
       </p>
       <form id="form" method="post" action="/waitlist">
         <div class="fields">
           <label>
             <span>Имя</span>
-            <input name="name" autocomplete="name" maxlength="80" required>
+            <input name="name" id="name" autocomplete="name" maxlength="80" required>
           </label>
           <label>
             <span>Почта</span>
-            <input name="email" type="email" autocomplete="email" maxlength="120" required>
+            <input name="email" id="email" type="email" autocomplete="email" maxlength="120" required>
           </label>
         </div>
         <label>
           <span>Где выступаете или зачем вам это — необязательно</span>
-          <textarea name="note" rows="2" maxlength="500"></textarea>
+          <textarea name="note" id="note" rows="2" maxlength="500"></textarea>
         </label>
         <label class="trap" aria-hidden="true"><span>Сайт</span><input name="website" tabindex="-1" autocomplete="off"></label>
         <div class="send">
-          <button type="submit" id="submit">Оставить заявку</button>
-          <p class="hint" id="hint">Ничего, кроме письма о доступе, не пришлю.</p>
+          <button class="cta" type="submit" id="submit">Оставить заявку</button>
+          <p class="hint" id="hint" aria-live="polite">Ничего, кроме письма о доступе, не пришлю.</p>
         </div>
       </form>
-      <p class="done" id="done" hidden>Заявка принята. Напишу на почту, когда откроется доступ.</p>
+      <p class="done" id="done" role="status" hidden>Заявка принята. Напишу на почту, когда откроется доступ.</p>
     </section>
   </main>
 

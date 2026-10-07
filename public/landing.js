@@ -78,6 +78,23 @@ if (reduced) {
   play();
 }
 
+/* The circle: silent on its own; a tap starts it over with sound, another tap mutes again. */
+
+const circle = $("circle");
+const video = $("circle-video");
+const circleButton = $("circle-button");
+
+if (!reduced) video.play().catch(() => {});
+
+circleButton.addEventListener("click", () => {
+  const sound = !circle.classList.contains("sound");
+  circle.classList.toggle("sound", sound);
+  video.muted = !sound;
+  circleButton.setAttribute("aria-label", sound ? "Выключить звук" : "Включить звук");
+  if (sound) video.currentTime = 0;
+  video.play().catch(() => {});
+});
+
 /* Early-access form */
 
 const form = $("form");
@@ -97,6 +114,7 @@ function fail(message) {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   $("submit").disabled = true;
+  $("submit").textContent = "Отправляю…";
   hint.textContent = plain;
   hint.classList.remove("error");
   try {
@@ -112,6 +130,7 @@ form.addEventListener("submit", async (event) => {
     fail("Нет связи с сервером. Попробуйте ещё раз через минуту.");
   } finally {
     $("submit").disabled = false;
+    $("submit").textContent = "Оставить заявку";
   }
 });
 
