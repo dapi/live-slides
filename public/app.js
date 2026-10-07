@@ -7,6 +7,8 @@ const state = {
   status: null,
   finals: [],
   partial: "",
+  variants: false,
+  paths: [], // the paths mode: where the talk may go next, as cards
 };
 
 let ws;
@@ -145,11 +147,52 @@ function buildEmpty() {
   return root;
 }
 
+/** The points of a slide the speaker has actually said, whatever its layout. */
+function saidPoints(slide) {
+  const texts = slide.bullets?.length ? slide.bullets
+    : slide.left && slide.right ? [...slide.left.items, ...slide.right.items]
+    : [slide.subtitle, slide.quote && `«${slide.quote}»`, slide.value && [slide.value, slide.caption].filter(Boolean).join(" — ")].filter(Boolean);
+  return texts.filter((text) => !slide.predicted.includes(text));
+}
+
+function card(label, title, items, className) {
+  const node = el("section", `card ${className}`);
+  node.append(el("p", "card-label", label));
+  if (title) node.append(el("h2", "", title));
+  if (items.length) {
+    const ul = node.appendChild(el("ul", "slide-list"));
+    for (const text of items) ul.append(el("li", "", text));
+  }
+  return node;
+}
+
+/**
+ * The paths mode: four cards of one colour. The first holds what the speaker is saying now,
+ * the other three are directions the talk may take in the next quarter of a minute.
+ */
+function buildCards(slide, before) {
+  const root = el("article", "cards");
+  const now = slide ? card("Сейчас", slide.title, saidPoints(slide), "card-now") : card("Сейчас", "", [], "card-now card-empty");
+  if (!slide) now.append(el("p", "card-note", state.listening ? "Слушаю — тезисы появятся по ходу речи" : "Нажмите «Слушать»: здесь будут тезисы того, что вы говорите"));
+  root.append(now);
+  for (let i = 0; i < 3; i++) {
+    const path = state.paths[i];
+    if (path) {
+      const node = card("Дальше", path.title, path.bullets, "card-path");
+      if (path.source) node.append(el("p", "card-note", `Источник: ${path.source.url ? `${path.source.title} — ${new URL(path.source.url).hostname}` : path.source.title}`));
+      root.append(node);
+    } else {
+      root.append(card("Дальше", "", [], "card-path card-empty"));
+    }
+  }
+  return root;
+}
+
 /** `before` is the previous version of the same slide: what differs gets the marker stroke. */
 function renderStage({ before = null, enter = false } = {}) {
   const index = state.view ?? state.slides.length - 1;
   const slide = state.slides[index];
-  const node = slide ? buildSlide(slide, index, before) : buildEmpty();
+  const node = state.variants ? buildCards(state.slides.at(-1)) : slide ? buildSlide(slide, index, before) : buildEmpty();
   if (enter) node.classList.add("enter");
   $("stage").replaceChildren(node);
 
@@ -211,10 +254,21 @@ function renderStatus() {
     rows.push(row("", "idle", `${(status.speechToSlideMs / 1000).toFixed(1).replace(".", ",")} с до слайда`));
   }
   $("chain").replaceChildren(...rows);
+  if (state.variants !== status.variants) {
+    state.variants = status.variants;
+    renderStage();
+  }
+  $("variants").setAttribute("aria-pressed", String(status.variants));
   // Only engines this server can run are offered; with a single one there is nothing to choose.
   for (const option of $("engine").options) option.hidden = option.disabled = !stt.engines.includes(option.value);
   $("engine").parentElement.hidden = stt.engines.length < 2;
   if (!stt.engines.includes($("engine").value)) $("engine").value = stt.engine;
+}
+
+/** Early-access requests left on the public page; the owner sees how many came in. */
+function renderWaitlist(count) {
+  $("waitlist").hidden = !count;
+  $("waitlist").textContent = `Заявки: ${count ?? 0}`;
 }
 
 function renderListening() {
@@ -242,18 +296,29 @@ function connect() {
         state.view = null;
         state.listening = message.listening;
         state.status = message.status;
+        state.variants = message.status.variants;
+        state.paths = message.paths ?? [];
         state.finals = message.transcript.map((entry) => entry.text);
         state.partial = "";
         renderStage();
         renderTape();
         renderStatus();
         renderListening();
+        renderWaitlist(message.waitlist);
+        break;
+      case "waitlist":
+        renderWaitlist(message.count);
+        break;
+      case "paths":
+        state.paths = message.paths;
+        if (state.variants) renderStage({ enter: true });
         break;
       case "slide": {
         const before = message.action === "update" ? state.slides[message.index] : null;
         state.slides[message.index] = message.slide;
         const live = message.index === state.slides.length - 1;
-        if (state.view === null && live) renderStage({ before, enter: message.action === "new" });
+        if (state.variants) renderStage();
+        else if (state.view === null && live) renderStage({ before, enter: message.action === "new" });
         else if (state.view === null && !live) break; // an earlier slide was tidied up; nothing on screen changes
         else renderStage();
         break;
@@ -348,6 +413,7 @@ function setTheme(theme) {
 
 $("mic").onclick = toggleMic;
 $("new-slide").onclick = () => send({ type: "new-slide" });
+$("variants").onclick = () => send({ type: "variants", on: !state.variants });
 $("back-live").onclick = () => go(state.slides.length - 1);
 $("reset").onclick = () => {
   if (confirm("Начать новую сессию? Слайды и текст этой сессии останутся в папке data/sessions.")) {
@@ -365,6 +431,7 @@ document.addEventListener("keydown", (event) => {
   switch (event.code) {
     case "Space": event.preventDefault(); toggleMic(); break;
     case "KeyN": send({ type: "new-slide" }); break;
+    case "KeyV": send({ type: "variants", on: !state.variants }); break;
     case "ArrowLeft": case "PageUp": go(index - 1); break;
     case "ArrowRight": case "PageDown": go(index + 1); break;
     case "KeyL": case "End": go(state.slides.length - 1); break;

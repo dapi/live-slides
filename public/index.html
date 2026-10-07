@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;500;700;800&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/slide.css">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -25,8 +26,10 @@
     <ul class="chain" id="chain" aria-live="polite"></ul>
     <div class="bar-actions">
       <button type="button" id="new-slide" title="Клавиша N">Новый слайд</button>
+      <button type="button" id="variants" title="Три направления, куда может пойти доклад. Клавиша V" aria-pressed="false">Варианты</button>
       <a id="download" href="/api/deck.md" title="Все слайды сессии в Markdown">Скачать</a>
       <button type="button" id="reset">Новая сессия</button>
+      <a id="waitlist" href="/api/waitlist" title="Заявки на ранний доступ с главной страницы" hidden></a>
     </div>
   </header>
 

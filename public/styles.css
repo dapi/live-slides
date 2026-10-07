@@ -1,27 +1,3 @@
-:root {
-  --paper: #eef1f4;
-  --ink: #0e1a3a;
-  --cobalt: #2747f5;
-  --marker: #ffe04a;
-  --marker-ink: #0e1a3a;
-  --mute: #66708c;
-  --line: #c8cfdb;
-  --ok: #17805a;
-  --alarm: #c2301c;
-  --display: "Geologica", "Golos Text", system-ui, sans-serif;
-  --text: "Golos Text", system-ui, sans-serif;
-}
-
-:root[data-theme="dark"] {
-  --paper: #0b1330;
-  --ink: #edf0f5;
-  --cobalt: #8fa4ff;
-  --mute: #8d97b5;
-  --line: #27325a;
-  --ok: #5fd0a1;
-  --alarm: #ff8a75;
-}
-
 * { box-sizing: border-box; }
 
 html, body { height: 100%; margin: 0; }
@@ -172,179 +148,74 @@ body.quiet .bar { opacity: 0; pointer-events: none; }
 
 .rail button[aria-current="true"] { background-image: linear-gradient(var(--cobalt), var(--cobalt)); background-size: 30px 3px; }
 
-.slide {
+/* The paths mode: four cards of one colour on the sheet; now at the top left, three ways on. */
+
+.cards {
   position: absolute;
   inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 1.6cqw;
+  padding: 2.6cqw;
+}
+
+.cards.enter { animation: rise 0.4s ease both; }
+
+.card {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding: 6cqw 7cqw 7cqw 6cqw;
-}
-
-.slide.enter { animation: rise 0.4s ease both; }
-
-.slide-title {
-  margin: 0 0 3.4cqw;
-  font-family: var(--display);
-  font-size: 5cqw;
-  font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: -0.015em;
-  text-wrap: balance;
-}
-
-.slide-topic {
-  margin: 0 0 2.6cqw;
-  color: var(--mute);
-  font-size: 2.1cqw;
-  font-weight: 500;
-}
-
-.layout-statement .slide-title { font-size: 7cqw; font-weight: 800; line-height: 1.02; letter-spacing: -0.025em; }
-.layout-statement .slide-title.long { font-size: 5.6cqw; }
-
-.slide-sub {
-  max-width: 68cqw;
-  margin: 0;
-  font-size: 2.9cqw;
-  line-height: 1.25;
-}
-
-.slide-list { margin: 0; padding: 0; list-style: none; }
-
-.slide-list li {
-  position: relative;
-  max-width: 76cqw;
-  margin: 0 0 1.7cqw;
-  padding-left: 3.4cqw;
-  font-size: 3cqw;
-  line-height: 1.22;
-  text-wrap: balance;
-}
-
-.slide-list li::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.52em;
-  width: 1.9cqw;
-  height: 0.36cqw;
+  min-height: 0;
+  padding: 2cqw 2.4cqw;
+  overflow: hidden;
+  border-radius: 2cqw;
   background: var(--cobalt);
+  color: var(--paper);
 }
 
-.slide-quote {
-  max-width: 78cqw;
-  margin: 0 0 2.4cqw;
-  font-family: var(--display);
-  font-size: 4cqw;
-  font-weight: 300;
-  line-height: 1.18;
-  text-indent: -0.62em;
-}
-
-.slide-by { margin: 0; color: var(--mute); font-size: 2.1cqw; }
-
-.slide-value {
+.card-label {
   margin: 0 0 1cqw;
-  color: var(--cobalt);
-  font-family: var(--display);
-  font-size: 16cqw;
-  font-weight: 800;
-  line-height: 0.95;
-  letter-spacing: -0.04em;
-}
-
-.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 5cqw; }
-.compare section { padding-top: 1.6cqw; border-top: 0.32cqw solid var(--ink); }
-.compare section + section { border-color: var(--cobalt); }
-.compare h2 { margin: 0 0 1.6cqw; font-family: var(--display); font-size: 2.8cqw; font-weight: 700; line-height: 1.1; }
-.compare .slide-list li { margin-bottom: 1.2cqw; padding-left: 0; font-size: 2.4cqw; }
-.compare .slide-list li::before { content: none; }
-
-.slide-foot {
-  position: absolute;
-  left: 6cqw;
-  right: 7cqw;
-  bottom: 3cqw;
-  display: flex;
-  justify-content: space-between;
-  gap: 4cqw;
-  color: var(--mute);
+  color: var(--marker);
   font-size: 1.5cqw;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
-.slide-foot .slide-sources { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.slide-foot .slide-count { flex: none; margin-left: auto; font-variant-numeric: tabular-nums; }
-.slide-foot .slide-legend { flex: none; }
-
-/* The one loud thing: words that just arrived from speech get a marker stroke that dries out. */
-
-.fresh {
-  background: linear-gradient(var(--marker), var(--marker)) no-repeat 0 62% / 0% 82%;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-  animation: stroke 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) forwards, dry 1.2s 6s forwards;
+.card-path .card-label::before {
+  content: "";
+  display: inline-block;
+  width: 1.6cqw;
+  height: 0.3cqw;
+  margin-right: 0.7cqw;
+  vertical-align: middle;
+  background: repeating-linear-gradient(90deg, currentColor 0 0.4cqw, transparent 0.4cqw 0.7cqw);
 }
 
-:root[data-theme="dark"] .fresh { animation: stroke 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) forwards, dry 1.2s 6s forwards, marker-ink 7.2s; }
+.card-now .card-label::before {
+  content: "";
+  display: inline-block;
+  width: 1.6cqw;
+  height: 0.3cqw;
+  margin-right: 0.7cqw;
+  vertical-align: middle;
+  background: currentColor;
+}
 
-/* Diagrams: boxes and arrows in the slide's own units */
-
-.diagram { max-width: 86cqw; }
-.diagram-row { display: flex; align-items: stretch; gap: 1.2cqw; }
-
-.node {
-  display: flex;
-  align-items: center;
-  flex: 1 1 0;
-  min-height: 7cqw;
-  padding: 1.4cqw 1.6cqw;
-  border: 0.3cqw solid var(--ink);
-  border-radius: 0.8cqw;
-  font-size: 2.2cqw;
-  line-height: 1.2;
+.card h2 {
+  margin: 0 0 1.2cqw;
+  font-family: var(--display);
+  font-size: 2.7cqw;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
   text-wrap: balance;
 }
 
-.node.ahead { border-style: dashed; border-color: var(--cobalt); }
+.card .slide-list li { max-width: none; margin-bottom: 0.8cqw; padding-left: 2.2cqw; font-size: 1.9cqw; }
+.card .slide-list li::before { width: 1.3cqw; height: 0.26cqw; background: var(--paper); opacity: 0.7; }
 
-.arrow { flex: none; align-self: center; width: 2.6cqw; height: 2.6cqw; fill: none; stroke: var(--cobalt); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-
-.loop {
-  position: relative;
-  height: 2.6cqw;
-  margin: 0.4cqw 9cqw 0 8cqw;
-  border: 0.3cqw solid var(--cobalt);
-  border-top: 0;
-  border-radius: 0 0 1cqw 1cqw;
-}
-
-.loop-head {
-  position: absolute;
-  left: -1.6cqw;
-  top: -1.6cqw;
-  width: 2.9cqw;
-  height: 2.9cqw;
-  fill: none;
-  stroke: var(--cobalt);
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.diagram-layers { display: flex; flex-direction: column; gap: 0.8cqw; width: 60cqw; }
-.diagram-layers .node { min-height: 5.2cqw; justify-content: center; text-align: center; }
-.diagram-layers .node:last-child { border-width: 0.5cqw; }
-
-/* Forecast: where the talk is heading. Lighter and dashed until the speaker gets there. */
-
-.ahead { color: var(--mute); }
-
-.slide-list li.ahead::before {
-  background: repeating-linear-gradient(90deg, var(--cobalt) 0 0.42cqw, transparent 0.42cqw 0.74cqw);
-}
-
-.slide-value .ahead { color: var(--mute); }
+.card-note { margin: auto 0 0; padding-top: 1cqw; font-size: 1.4cqw; opacity: 0.75; }
+.card-empty { background: color-mix(in srgb, var(--cobalt) 55%, var(--paper)); }
 
 /* Empty stage */
 
@@ -403,10 +274,6 @@ body.quiet .bar { opacity: 0; pointer-events: none; }
   animation: blink 1s steps(2) infinite;
 }
 
-@keyframes stroke { to { background-size: 100% 82%; } }
-@keyframes dry { from { background-size: 100% 82%; background-position: 0 100%; } to { background-size: 100% 0%; background-position: 0 100%; } }
-@keyframes marker-ink { 0%, 86% { color: var(--marker-ink); } 100% { color: var(--ink); } }
-@keyframes rise { from { opacity: 0; transform: translateY(1.2cqw); } }
 @keyframes pulse { 50% { opacity: 0.35; } }
 @keyframes blink { 50% { opacity: 0; } }
 
@@ -423,7 +290,5 @@ body.quiet .bar { opacity: 0; pointer-events: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .slide.enter, .is-working .dot, .listening #tape-partial::after { animation: none; }
-  .fresh { background-size: 100% 82%; animation: dry 0.01s 6s forwards; }
-  :root[data-theme="dark"] .fresh { color: var(--marker-ink); animation: dry 0.01s 6s forwards, marker-ink 6.1s; }
+  .is-working .dot, .listening #tape-partial::after { animation: none; }
 }

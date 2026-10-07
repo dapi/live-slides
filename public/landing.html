@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Живые слайды</title>
+  <meta name="description" content="Вы говорите — слайды собираются сами и опережают речь. Распознавание в реальном времени, прогноз мысли и ваши собственные материалы.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;500;700;800&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/slide.css">
+  <link rel="stylesheet" href="/landing.css">
+</head>
+<body>
+  <header class="top">
+    <a class="wordmark" href="/">Живые слайды</a>
+    <a class="enter" href="/app/">Войти</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Слайды появляются раньше, чем вы договорите.</h1>
+      <p class="lead">
+        Вы говорите в микрофон. Сервис распознаёт речь на ходу, понимает, куда идёт мысль,
+        и к моменту, когда вы к ней подходите, слайд уже на экране — с цифрами и формулировками
+        из ваших собственных текстов.
+      </p>
+
+      <figure class="demo" aria-label="Как выглядит слайд, который собирается во время речи">
+        <div class="sheet" id="sheet">
+          <div class="slide layout-bullets" id="demo-slide" hidden>
+            <p class="slide-topic">Агентная разработка</p>
+            <h2 class="slide-title">Агент в команде разработчиков</h2>
+            <ul class="slide-list" id="demo-list">
+              <li>Читает правила репозитория до первой правки</li>
+              <li>Каждый шаг оставляет след в задаче</li>
+              <li>Результат принимает человек</li>
+            </ul>
+            <div class="slide-foot">
+              <span class="slide-sources">Практика агентной разработки, pismenny.ru</span>
+              <span class="slide-legend">— сказано · ┄ прогноз</span>
+            </div>
+          </div>
+        </div>
+        <figcaption class="tape" aria-hidden="true"><span id="demo-final"></span><span id="demo-partial"></span></figcaption>
+      </figure>
+    </section>
+
+    <section class="how">
+      <div>
+        <h2>Слышит сразу</h2>
+        <p>Слово появляется на экране через полсекунды после того, как вы его произнесли. Пауза закрывает фразу, и она уходит в ленту речи под слайдом.</p>
+      </div>
+      <div>
+        <h2>Опережает мысль</h2>
+        <p>Когда вы объявляете тему или перечисление, слайд открывается на объявлении. Пункты, до которых вы ещё не дошли, стоят пунктиром и становятся обычными, когда вы их произносите. Если вы ушли в другую сторону, несбывшийся прогноз снимается.</p>
+      </div>
+      <div>
+        <h2>Берёт материал из вашего</h2>
+        <p>Цифры, цитаты, формулировки и схемы — из ваших статей, заметок, опубликованного на сайте или загруженных в систему документов. Слайд ссылается только на то, на что опирается. После выступления колода сохраняется.</p>
+      </div>
+    </section>
+
+    <section class="access" id="access">
+      <h2>Ранний доступ</h2>
+      <p>
+        Сейчас сервис работает для одного докладчика — автора. Я собираю тех, кому он нужен:
+        напишу, когда можно будет подключиться по подписке, и позову попробовать первыми.
+      </p>
+      <form id="form" method="post" action="/waitlist">
+        <div class="fields">
+          <label>
+            <span>Имя</span>
+            <input name="name" autocomplete="name" maxlength="80" required>
+          </label>
+          <label>
+            <span>Почта</span>
+            <input name="email" type="email" autocomplete="email" maxlength="120" required>
+          </label>
+        </div>
+        <label>
+          <span>Где выступаете или зачем вам это — необязательно</span>
+          <textarea name="note" rows="2" maxlength="500"></textarea>
+        </label>
+        <label class="trap" aria-hidden="true"><span>Сайт</span><input name="website" tabindex="-1" autocomplete="off"></label>
+        <div class="send">
+          <button type="submit" id="submit">Оставить заявку</button>
+          <p class="hint" id="hint">Ничего, кроме письма о доступе, не пришлю.</p>
+        </div>
+      </form>
+      <p class="done" id="done" hidden>Заявка принята. Напишу на почту, когда откроется доступ.</p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a href="https://pismenny.ru">Данил Письменный, pismenny.ru</a>
+    <a href="/app/">Вход для автора</a>
+  </footer>
+
+  <script type="module" src="/landing.js"></script>
+</body>
+</html>

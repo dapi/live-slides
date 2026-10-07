@@ -18,6 +18,8 @@ export interface Status {
   speechToSlideMs?: number;
   /** The director's current guess about what the speaker says next. */
   next?: string;
+  /** The paths mode: three directions the talk may take, shown as cards beside the current points. */
+  variants: boolean;
 }
 
 export type Broadcast = (message: Record<string, unknown>) => void;
@@ -70,6 +72,7 @@ export class Session {
       stt: { state: "idle", engine: engines.includes(config.stt.engine) ? config.stt.engine : "elevenlabs", engines },
       slides: { state: "idle", model: config.llm.model },
       sources: { state: places.length ? "idle" : "off", scopes: places },
+      variants: false,
     };
     this.director = new Director([sources, site], {
       onSlide: (slide, action, index) => {
@@ -78,6 +81,9 @@ export class Session {
       },
       onNext: (next) => {
         this.status.next = next || undefined;
+      },
+      onPaths: (paths) => {
+        this.broadcast({ type: "paths", paths });
       },
       onStage: (stage, detail) => {
         this.status.slides = { ...this.status.slides, state: stage === "error" ? "error" : stage === "idle" ? "idle" : "working", detail };
@@ -132,6 +138,7 @@ export class Session {
       listening: this.listening,
       slides: this.slides,
       transcript: this.transcript.slice(-30),
+      paths: this.director.paths,
       status: this.status,
     };
   }
@@ -191,6 +198,12 @@ export class Session {
 
   newSlide(): void {
     this.director.force();
+  }
+
+  setVariants(on: boolean): void {
+    this.director.setVariants(on);
+    this.status.variants = on;
+    this.pushStatus();
   }
 
   private ensureDir(): Promise<unknown> {

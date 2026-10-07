@@ -59,10 +59,19 @@ export interface StepMetric {
   tokensIn?: number;
   tokensOut?: number;
   tokensReasoning?: number;
+  paths?: string[];
+}
+
+/** One of the directions the talk may take next: a small slide the speaker can glance at. */
+export interface Path {
+  title: string;
+  bullets: string[];
+  source?: Slide["sources"][number];
 }
 
 export interface DirectorEvents {
   onSlide(slide: Slide, action: "new" | "update", index: number): void;
+  onPaths(paths: Path[]): void;
   onStage(stage: "idle" | "sources" | "llm" | "error", detail?: string): void;
   onSources(found: number, error?: string): void;
   onNext(next: string): void;
@@ -145,6 +154,15 @@ export const SYSTEM_PROMPT = `Ты — режиссёр живых слайдо�
 Ответь строго одним JSON-объектом, без пояснений и без markdown:
 {"action":"keep"|"update"|"new","slide":{"layout":"bullets","title":"...","bullets":[{"text":"...","said":true},{"text":"...","said":false}]},"next":"...","sources":[1]}
 Для "keep" поле slide не нужно. В slide включай только поля выбранного макета.`;
+
+/** Added to the system prompt in the paths mode: three cards with where the talk may go. */
+export const PATHS_PROMPT = `Режим вариантов включён. Кроме слайда верни "paths": три направления, куда доклад может пойти в ближайшие 15 секунд. Это подсказки докладчику, он видит их на экране рядом с текущими тезисами и может выбрать любое.
+Каждое направление — мини-слайд: {"title": тема до 6 слов, "bullets": 2–3 тезиса до 8 слов, "source": номер выдержки, на которую опирается, или null}.
+Направления должны заметно отличаться друг от друга:
+1. самое вероятное продолжение текущей мысли;
+2. соседняя тема из выдержек, к которой докладчик может перейти;
+3. другой ход: пример, возражение, вывод или вопрос аудитории.
+Тезисы — содержательные утверждения, а не описания («докладчик расскажет о…»). Цифры и факты только из выдержек, остальное — по смыслу речи. Верни "paths" при любом действии, включая "keep".`;
 
 function clip(value: unknown, max: number): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
@@ -267,6 +285,9 @@ function merge(groups: SourceHit[][]): SourceHit[] {
  */
 export class Director {
   readonly slides: Slide[] = [];
+  /** The paths mode: every step also brings three directions the talk may take. */
+  variants = false;
+  paths: Path[] = [];
   private pending: string[] = [];
   private pendingSince = 0;
   private covered = "";
@@ -437,6 +458,7 @@ export class Director {
       llmMs = Math.round(performance.now() - llmStarted);
 
       const result = this.apply(decision, current, hits, force);
+      if (this.variants) this.takePaths(decision, hits, current);
       this.covered = `${this.covered} ${fresh}`.trim().slice(-4000);
       this.failures = 0;
       const next = clip(decision?.next, 160);
@@ -448,6 +470,7 @@ export class Director {
         tokensIn: decision?.usage?.prompt_tokens,
         tokensOut: decision?.usage?.completion_tokens,
         tokensReasoning: decision?.usage?.completion_tokens_details?.reasoning_tokens,
+        paths: this.variants ? this.paths.map((path) => path.title) : undefined,
       }));
     } catch (error) {
       // Nothing is lost: the words return to the queue and go into the next step.
@@ -498,11 +521,11 @@ export class Director {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.llm.apiKey}` },
         body: JSON.stringify({
           model: config.llm.model,
-          max_tokens: 700,
+          max_tokens: this.variants ? 1100 : 700,
           temperature: config.llm.temperature,
           ...config.llm.extraBody,
           messages: [
-            { role: "system", content: SYSTEM_PROMPT },
+            { role: "system", content: this.variants ? `${SYSTEM_PROMPT}\n\n${PATHS_PROMPT}` : SYSTEM_PROMPT },
             { role: "user", content: user },
           ],
         }),
@@ -540,6 +563,32 @@ export class Director {
     });
   }
 
+  /** Turns the paths mode on or off; off clears the cards at once. */
+  setVariants(on: boolean): void {
+    if (this.variants === on) return;
+    this.variants = on;
+    if (!on) {
+      this.paths = [];
+      this.events.onPaths([]);
+    }
+  }
+
+  /** Sources the model may cite this step: its excerpts, then those carried over from the slide. */
+  private citable(current: Slide | undefined, hits: SourceHit[]): Slide["sources"] {
+    return [...hits.map((hit) => ({ title: hit.title, ref: hit.ref, url: hit.url })), ...this.carried(current, hits)];
+  }
+
+  private takePaths(decision: any, hits: SourceHit[], current: Slide | undefined): void {
+    const citable = this.citable(current, hits);
+    const paths: Path[] = (Array.isArray(decision?.paths) ? decision.paths : [])
+      .map((raw: any): Path => ({ title: clip(raw?.title, 80), bullets: points(raw?.bullets, 3, []), source: citable[Number(raw?.source) - 1] }))
+      .filter((path: Path) => path.title)
+      .slice(0, 3);
+    if (!paths.length) return; // a step without cards keeps the previous ones on screen
+    this.paths = paths;
+    this.events.onPaths(paths);
+  }
+
   /** Sources already credited on the slide that this step's search did not return again. */
   private carried(current: Slide | undefined, hits: SourceHit[]): Slide["sources"] {
     return (current?.sources ?? []).filter((source) => !hits.some((hit) => hit.ref === source.ref || sameTitle(hit.title, source.title)));
@@ -555,7 +604,7 @@ export class Director {
     if (force || !current) action = "new";
 
     // Numbers refer to this step's excerpts followed by the sources carried over from the slide.
-    const citable = [...hits.map((hit) => ({ title: hit.title, ref: hit.ref, url: hit.url })), ...this.carried(current, hits)];
+    const citable = this.citable(current, hits);
     const cited = (Array.isArray(decision.sources) ? decision.sources : [])
       .map((n: unknown) => citable[Number(n) - 1])
       .filter((source: Slide["sources"][number] | undefined, i: number, all: (Slide["sources"][number] | undefined)[]) =>
