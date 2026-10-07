@@ -27,7 +27,7 @@ export class Database {
 
   async user(subject: string, displayName: string): Promise<User> {
     const [user] = await this.sql`INSERT INTO app_users(subject, display_name) VALUES (${subject}, ${displayName})
-      ON CONFLICT(subject) DO UPDATE SET display_name = excluded.display_name RETURNING id, subject, display_name`;
+      ON CONFLICT(subject) DO UPDATE SET subject = excluded.subject RETURNING id, subject, display_name`;
     return user;
   }
 

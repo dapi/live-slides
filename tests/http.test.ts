@@ -6,6 +6,7 @@ const suite = process.env.DATABASE_URL && process.env.TEST_APP_PORT && process.e
 suite('HTTP and WebSocket tenant boundary', () => {
   let db: Database, process: ReturnType<typeof Bun.spawn>, mock: ReturnType<typeof Bun.serve>;
   let cookieA: string, cookieB: string, a: string, b: string;
+  let ownerCookie: string;
   const origin = `http://127.0.0.1:${Bun.env.TEST_APP_PORT}`;
   const mockOrigin = `http://127.0.0.1:${Bun.env.TEST_MOCK_PORT}`;
   const suffix = crypto.randomUUID();
@@ -30,7 +31,7 @@ suite('HTTP and WebSocket tenant boundary', () => {
     } });
     for (const login of ['alice', 'bob']) {
       const hash = await Bun.password.hash(credentials, { algorithm: 'argon2id' });
-      const [user] = await db.sql`INSERT INTO app_users(subject, display_name, password_hash) VALUES (${'local:' + login + '-' + suffix}, ${login}, ${hash}) RETURNING id`;
+      const [user] = await db.sql`INSERT INTO app_users(subject, display_name, password_hash, username) VALUES (${'local:' + login + '-' + suffix}, ${login}, ${hash}, ${login + '-' + suffix}) RETURNING id`;
       createdUsers.push(user.id);
     }
     process = Bun.spawn(['bun', 'src/server.ts'], { env: { ...Bun.env, PORT: Bun.env.TEST_APP_PORT, APP_ORIGIN: origin,
@@ -86,23 +87,44 @@ suite('HTTP and WebSocket tenant boundary', () => {
     const list = await (await request('/api/projects', cookieA)).json();
     expect(list[0].document_count).toBe(0); expect(list[0].ready_count).toBe(0);
   });
-  test('private connector requires verified Corp cookie, never a password account', async () => {
+  test('private connector belongs to the verified owner through app-owned sessions', async () => {
     expect((await request('/api/projects', cookieA, 'POST', { name: 'private connector', personalSource: true })).status).toBe(403);
-    const me = await (await request('/api/me', 'synthetic-corp=verified')).json();
+    expect((await request('/api/me', 'synthetic-corp=verified')).status).toBe(401);
+    const bridge = await fetch(origin + '/auth/corp', { headers: { Cookie: 'synthetic-corp=verified' }, redirect: 'manual' });
+    expect(bridge.status).toBe(303);
+    ownerCookie = bridge.headers.get('set-cookie')!.split(';')[0]!;
+    const me = await (await request('/api/me', ownerCookie)).json();
     expect(me.personalSourceAvailable).toBe(true);
-    const created = await request('/api/projects', 'synthetic-corp=verified', 'POST', { name: 'Corp owner project', personalSource: true });
+    const created = await request('/api/projects', ownerCookie, 'POST', { name: 'Corp owner project', personalSource: true });
     expect(created.status).toBe(201);
     const project = await created.json();
     expect((await request('/api/projects/' + project.id + '/documents', cookieA)).status).toBe(404);
-    const ownerSocket = await socket(project.id, 'synthetic-corp=verified');
+    const ownerSocket = await socket(project.id, ownerCookie);
     expect(ownerSocket.state.status.sources.scopes.length).toBeGreaterThan(1);
     const closed = new Promise<number>(resolve => { ownerSocket.ws.onclose = event => resolve(event.code); });
-    expect((await request('/api/projects/' + project.id, 'synthetic-corp=verified', 'PATCH', { name: 'Owner project', personalSource: false })).status).toBe(200);
+    expect((await request('/api/projects/' + project.id, ownerCookie, 'PATCH', { name: 'Owner project', personalSource: false })).status).toBe(200);
     expect(await closed).toBe(4002);
-    const updated = await socket(project.id, 'synthetic-corp=verified');
+    const updated = await socket(project.id, ownerCookie);
     expect(updated.state.status.sources.scopes).toEqual(['Документы презентации']);
     expect(updated.state.session).toBe(ownerSocket.state.session);
     updated.ws.close();
+    const profile = await (await request('/api/profile', ownerCookie)).json();
+    expect(profile.hasPassword).toBe(false);
+    expect((await request('/api/profile', ownerCookie, 'PATCH', { name: 'Custom owner name' })).status).toBe(200);
+    const login = 'owner-' + suffix;
+    const createdPassword = await request('/api/auth/password', ownerCookie, 'POST', { username: login, newPassword: credentials });
+    expect(createdPassword.status).toBe(200);
+    expect((await request('/api/projects', ownerCookie)).status).toBe(401);
+    const direct = await request('/api/auth/login', '', 'POST', { username: login, password: credentials });
+    expect(direct.status).toBe(200);
+    const directCookie = direct.headers.get('set-cookie')!.split(';')[0]!;
+    expect((await (await request('/api/me', directCookie)).json()).personalSourceAvailable).toBe(true);
+    expect((await (await request('/api/projects', directCookie)).json()).some((p: any) => p.id === project.id)).toBe(true);
+    const bridgeAgain = await fetch(origin + '/auth/corp', { headers: { Cookie: 'synthetic-corp=verified' }, redirect: 'manual' });
+    const bridgeCookie = bridgeAgain.headers.get('set-cookie')!.split(';')[0]!;
+    expect((await (await request('/api/profile', bridgeCookie)).json()).name).toBe('Custom owner name');
+    expect((await request('/api/auth/logout', bridgeCookie, 'POST')).status).toBe(200);
+    expect((await request('/api/projects', bridgeCookie + '; synthetic-corp=verified')).status).toBe(401);
     const [owner] = await db.sql`SELECT id FROM app_users WHERE subject = 'corp:owner'`;
     await db.as(owner.id, tx => tx`DELETE FROM projects WHERE id = ${project.id}`);
   });
@@ -121,6 +143,33 @@ suite('HTTP and WebSocket tenant boundary', () => {
     expect((await reset).session).not.toBe(sa.state.session);
     await Bun.sleep(100); expect(receivedB).toHaveLength(0);
     sa.ws.close(); sb.ws.close();
+  });
+  test('profile and password belong to the app and revoke previous sessions', async () => {
+    expect((await request('/api/profile')).status).toBe(401);
+    const profile = await (await request('/api/profile', cookieA)).json();
+    expect(profile.username).toBe('alice-' + suffix); expect(profile.hasPassword).toBe(true);
+    expect(Object.keys(profile).sort()).toEqual(['hasPassword', 'name', 'username']);
+    expect((await fetch(origin + '/api/profile', { method: 'PATCH', headers: { Cookie: cookieA, Origin: 'https://attacker.test' }, body: '{}' })).status).toBe(403);
+    expect((await request('/api/profile', cookieA, 'PATCH', { name: 'New Alice', id: createdUsers[1] })).status).toBe(200);
+    expect((await (await request('/api/profile', cookieB)).json()).name).toBe('bob');
+    const nextPassword = crypto.randomUUID();
+    expect((await request('/api/auth/password', cookieA, 'POST', { username: 'alice-' + suffix, currentPassword: 'wrong', newPassword: nextPassword })).status).toBe(400);
+    expect((await request('/api/auth/password', cookieA, 'POST', { username: 'alice-' + suffix, currentPassword: credentials, newPassword: 'short' })).status).toBe(400);
+    expect((await request('/api/auth/password', cookieA, 'POST', { username: 'bob-' + suffix, currentPassword: credentials, newPassword: nextPassword })).status).toBe(409);
+    const otherLogin = await request('/api/auth/login', '', 'POST', { username: 'alice-' + suffix, password: credentials });
+    const otherCookie = otherLogin.headers.get('set-cookie')!.split(';')[0]!;
+    const connected = await socket(a, otherCookie);
+    const closed = new Promise<number>(resolve => { connected.ws.onclose = event => resolve(event.code); });
+    const previousCookie = cookieA;
+    const saved = await request('/api/auth/password', cookieA, 'POST', { username: 'alice-new-' + suffix, currentPassword: credentials, newPassword: nextPassword });
+    expect(saved.status).toBe(200); expect(await closed).toBe(4001);
+    cookieA = saved.headers.get('set-cookie')!.split(';')[0]!;
+    expect((await request('/api/profile', previousCookie)).status).toBe(401);
+    expect((await request('/api/profile', otherCookie)).status).toBe(401);
+    expect((await request('/api/profile', cookieA)).status).toBe(200);
+    expect((await request('/api/auth/login', '', 'POST', { username: 'alice-new-' + suffix, password: credentials })).status).toBe(401);
+    expect((await request('/api/auth/login', '', 'POST', { username: ('alice-new-' + suffix).toUpperCase(), password: nextPassword })).status).toBe(200);
+    expect((await request('/api/profile', cookieB)).status).toBe(200);
   });
   test('logout closes existing sockets and invalidates the cookie', async () => {
     const connected = await socket(a, cookieA);

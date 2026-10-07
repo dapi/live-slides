@@ -473,8 +473,7 @@ async function api(path, options = {}) {
 async function initProjects() {
   try {
     const me = await api("/api/me");
-    $("account-name").textContent = me.name;
-    $("logout").hidden = !me.localAccount;
+    renderAccount(me.name);
     personalSourceAvailable = me.personalSourceAvailable;
     $("personal-source-label").hidden = !personalSourceAvailable;
     await loadProjects();
@@ -517,7 +516,7 @@ function disconnect() {
 async function navigate(view, id = "", push = true) {
   const version = ++routeVersion;
   const project = projectList.find(p => p.id === id);
-  if (view !== "projects" && !project) { view = "projects"; id = ""; }
+  if (!["projects", "profile"].includes(view) && !project) { view = "projects"; id = ""; }
   if (currentView === "presentation" && (view !== "presentation" || id !== activeProject)) disconnect();
   clearTimeout(documentsTimer);
   if (id !== activeProject) {
@@ -527,22 +526,30 @@ async function navigate(view, id = "", push = true) {
   activeProject = id; currentView = view;
   const url = new URL(location.href);
   url.search = "";
-  if (id) { url.searchParams.set("project", id); url.searchParams.set("view", view); }
+  if (id) url.searchParams.set("project", id);
+  if (view !== "projects") url.searchParams.set("view", view);
   if (push && url.href !== location.href) history.pushState(null, "", url);
   else if (!push) history.replaceState(null, "", url);
   document.body.dataset.view = view;
   $("workspace-header").hidden = view === "presentation";
-  for (const name of ["projects", "settings", "presentation"]) $(`${name}-view`).hidden = view !== name;
+  for (const name of ["projects", "settings", "presentation", "profile"]) $(`${name}-view`).hidden = view !== name;
   $("bar").hidden = view !== "presentation";
   $("tape").hidden = true;
   $("tape-toggle").textContent = "Показать расшифровку";
   $("tape-toggle").setAttribute("aria-pressed", "false");
   $("away").hidden = true;
   $("presentation-menu").open = false;
+  for (const menu of document.querySelectorAll("[data-account-menu]")) menu.open = false;
   $("project-message").textContent = "";
   if (view === "projects") {
     $("projects-title").focus();
     try { await loadProjects(); } catch (error) { if (version === routeVersion) $("projects-message").textContent = error.message; }
+    return;
+  }
+  if (view === "profile") {
+    $("profile-title").focus();
+    $("profile-message").textContent = $("password-message").textContent = "";
+    await loadProfile();
     return;
   }
   $("presentation-name").textContent = project.name;
@@ -565,7 +572,7 @@ async function navigate(view, id = "", push = true) {
 async function restoreRoute() {
   const url = new URL(location.href);
   const id = url.searchParams.get("project") ?? "";
-  const view = url.searchParams.get("view") === "settings" ? "settings" : id ? "presentation" : "projects";
+  const view = url.searchParams.get("view") === "profile" ? "profile" : url.searchParams.get("view") === "settings" ? "settings" : id ? "presentation" : "projects";
   await navigate(view, id, false);
 }
 window.addEventListener("popstate", () => { void restoreRoute(); });
@@ -651,4 +658,46 @@ $("fullscreen").onclick = () => document.fullscreenElement ? document.exitFullsc
 $("shortcuts-open").onclick = () => { $("presentation-menu").open = false; $("shortcuts-dialog").showModal(); };
 $("shortcuts-close").onclick = () => $("shortcuts-dialog").close();
 document.addEventListener("click", event => { if (!event.target.closest("#presentation-menu")) $("presentation-menu").open = false; });
-$("logout").onclick = async () => { await api("/api/auth/logout", { method: "POST" }); location.href = "/login"; };
+function renderAccount(name) {
+  for (const label of document.querySelectorAll("[data-account-name]")) label.textContent = name;
+}
+async function loadProfile() {
+  try {
+    const profile = await api("/api/profile");
+    if (currentView !== "profile") return;
+    $("profile-form").elements.name.value = profile.name;
+    $("password-form").elements.username.value = profile.username ?? "";
+    $("current-password-label").hidden = !profile.hasPassword;
+    $("password-form").elements.currentPassword.required = profile.hasPassword;
+    $("password-submit").textContent = profile.hasPassword ? "Сменить пароль" : "Задать логин и пароль";
+    $("password-note").textContent = profile.hasPassword ? "После смены пароля другие устройства выйдут из аккаунта. Здесь вы останетесь в системе." : "Задайте логин и пароль, чтобы входить напрямую. Ваши презентации и источники сохранятся.";
+  } catch (error) { $("profile-message").textContent = error.message; }
+}
+for (const button of document.querySelectorAll("[data-profile-open]")) button.onclick = () => navigate("profile");
+for (const button of document.querySelectorAll("[data-logout]")) button.onclick = async () => {
+  button.disabled = true;
+  try { await api("/api/auth/logout", { method: "POST" }); disconnect(); location.href = "/login"; }
+  catch { button.textContent = "Не удалось выйти. Повторить"; button.disabled = false; }
+};
+$("profile-back").onclick = () => navigate("projects");
+$("profile-form").onsubmit = async event => {
+  event.preventDefault(); const form = event.target; const button = form.querySelector("button"); button.disabled = true;
+  try {
+    await api("/api/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.elements.name.value }) });
+    renderAccount(form.elements.name.value.trim()); $("profile-message").textContent = "Имя сохранено.";
+  } catch (error) { $("profile-message").textContent = error.message; }
+  finally { button.disabled = false; }
+};
+$("password-form").onsubmit = async event => {
+  event.preventDefault(); const form = event.target; const button = form.querySelector("button");
+  if (form.elements.newPassword.value !== form.elements.confirmation.value) { $("password-message").textContent = "Пароли не совпадают."; return; }
+  button.disabled = true;
+  try {
+    await api("/api/auth/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: form.elements.username.value, currentPassword: form.elements.currentPassword.value, newPassword: form.elements.newPassword.value }) });
+    await loadProfile(); $("password-message").textContent = "Пароль сохранён. Другие устройства вышли из аккаунта.";
+  } catch (error) { $("password-message").textContent = error.message; }
+  finally { for (const name of ["currentPassword", "newPassword", "confirmation"]) form.elements[name].value = ""; button.disabled = false; }
+};
+document.addEventListener("click", event => {
+  for (const menu of document.querySelectorAll("[data-account-menu]")) if (!menu.contains(event.target)) menu.open = false;
+});

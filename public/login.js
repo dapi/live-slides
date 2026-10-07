@@ -1,5 +1,6 @@
 const form = document.getElementById('login-form');
-document.getElementById('corp-login').href = 'https://auth.example.org/login?return_to=' + encodeURIComponent(location.origin + '/app/');
+if (new URL(location.href).searchParams.get('error') === 'corp') document.getElementById('login-message').textContent = 'Этот аккаунт Corp не подключён. Используйте логин и пароль сервиса.';
+void fetch('/api/auth/options').then(response => response.json()).then(options => { document.getElementById('corp-login').hidden = !options.corpAvailable; }).catch(() => {});
 form.onsubmit = async event => {
   event.preventDefault();
   const button = form.querySelector('button');

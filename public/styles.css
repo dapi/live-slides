@@ -374,3 +374,18 @@ dialog::backdrop { background: #101a3a66; }
 }
 
 .page-heading h1:focus { outline: none; }
+
+.account-menu { position: relative; flex-shrink: 0; }
+.account-menu > summary { display: flex; align-items: center; gap: 8px; list-style: none; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.account-menu > summary::-webkit-details-marker { display: none; }
+[data-account-name] { max-width: 20ch; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+.account-menu .menu-content > button { font: inherit; padding: 10px 12px; border-radius: 6px; color: var(--ink); background: transparent; cursor: pointer; }
+.account-menu .menu-content > button:hover { background: color-mix(in srgb, var(--cobalt) 8%, var(--paper)); }
+.profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#password-note { margin-bottom: 24px; }
+body.quiet:has(.account-menu[open]) { cursor: auto; }
+body.quiet:has(.account-menu[open]) .bar { opacity: 1; pointer-events: auto; }
+@media (max-width: 800px) { .profile-grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .workspace-header { gap: 12px; } [data-account-name] { max-width: 12ch; } .presentation-account > summary { padding: 8px; font-size: 12px; } }
+
+@media (max-width: 600px) { .bar-actions { order: 1; } .presentation-account { order: 0; } }

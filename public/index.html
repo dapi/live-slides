@@ -13,7 +13,7 @@
 <body data-view="projects">
   <header class="workspace-header" id="workspace-header">
     <a class="brand" href="/app/">Живые слайды</a>
-    <div class="account"><span id="account-name"></span><button type="button" id="logout" hidden>Выйти</button></div>
+    <details class="account-menu" data-account-menu><summary aria-label="Меню аккаунта"><span data-account-name>Аккаунт</span><span aria-hidden="true">⌄</span></summary><div class="menu-content"><button type="button" data-profile-open>Мой профиль</button><button type="button" data-logout>Выйти из аккаунта</button></div></details>
   </header>
 
   <main class="workspace" id="projects-view" aria-labelledby="projects-title">
@@ -50,6 +50,23 @@
     <p id="project-message" role="status" aria-live="polite"></p>
   </main>
 
+  <main class="workspace" id="profile-view" aria-labelledby="profile-title" hidden>
+    <button class="back-link" id="profile-back" type="button">← Мои презентации</button>
+    <div class="page-heading"><div><p class="eyebrow">Аккаунт</p><h1 id="profile-title" tabindex="-1">Мой профиль</h1><p class="muted">Имя и данные для входа в «Живые слайды».</p></div></div>
+    <div class="settings-grid profile-grid">
+      <section class="surface"><h2>Личные данные</h2><form id="profile-form" class="stack-form"><label>Ваше имя<input name="name" autocomplete="name" maxlength="100" required></label><button type="submit">Сохранить имя</button><p id="profile-message" role="status"></p></form></section>
+      <section class="surface"><h2>Логин и пароль</h2><p class="muted" id="password-note"></p>
+        <form id="password-form" class="stack-form">
+          <label>Логин<input name="username" autocomplete="username" minlength="3" maxlength="64" pattern="[a-zA-Z0-9][a-zA-Z0-9.\-]{2,63}" required><small class="muted">Латинские буквы, цифры, точка или дефис.</small></label>
+          <label id="current-password-label">Текущий пароль<input name="currentPassword" type="password" autocomplete="current-password" maxlength="128"></label>
+          <label>Новый пароль<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required><small class="muted">От 12 до 128 символов.</small></label>
+          <label>Повторите новый пароль<input name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+          <button type="submit" id="password-submit">Сменить пароль</button><p id="password-message" role="status"></p>
+        </form>
+      </section>
+    </div>
+  </main>
+
   <header class="bar" id="bar" hidden>
     <button type="button" id="presentation-back" class="back-link">← Презентации</button>
     <span class="presentation-name" id="presentation-name"></span>
@@ -69,7 +86,9 @@
         <details class="help-details"><summary>Состояние сервиса</summary><ul class="chain" id="chain" aria-live="polite"></ul><label class="engine">Распознавание<select id="engine"><option value="elevenlabs">ElevenLabs</option><option value="whisper">Whisper</option></select></label></details>
         <a id="waitlist" href="/api/waitlist" hidden></a>
       </div></details>
+
     </div>
+      <details class="account-menu presentation-account" data-account-menu><summary aria-label="Меню аккаунта">Аккаунт</summary><div class="menu-content"><button type="button" data-profile-open>Мой профиль</button><button type="button" data-logout>Выйти из аккаунта</button></div></details>
   </header>
   <main class="room" id="presentation-view" hidden><nav class="rail" id="rail" aria-label="Слайды"></nav><section class="stage" id="stage" aria-live="polite"></section></main>
   <p class="away" id="away" hidden><span id="away-text"></span><button type="button" id="back-live">Вернуться к живому слайду</button></p>

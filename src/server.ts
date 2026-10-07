@@ -16,7 +16,7 @@ const PUBLIC = join(config.root, 'public');
 const PAGES: Record<string, string> = { '/': 'landing.html', '/app': 'index.html', '/app/': 'index.html', '/login': 'login.html' };
 const db = await Database.open();
 await db.sql`SELECT id FROM projects LIMIT 0`;
-await db.sql`SELECT has_pending_documents FROM app_users LIMIT 0`;
+await db.sql`SELECT has_pending_documents, username FROM app_users LIMIT 0`;
 const auth = new Auth(db);
 const knowledge = new Knowledge(db);
 const api = new ProjectApi(db, knowledge, changeProject);
@@ -90,6 +90,8 @@ export const server = Bun.serve<SocketData>({
   async fetch(request, server) {
     try {
       const url = new URL(request.url);
+      if (url.pathname === '/auth/corp' && request.method === 'GET') return await auth.corpLogin(request);
+      if (url.pathname === '/api/auth/options' && request.method === 'GET') return json({ corpAvailable: !!config.auth.corpVerifyUrl });
       if (url.pathname === '/healthz') return new Response('ok');
       if (url.pathname === '/waitlist' && request.method === 'POST') return joinWaitlist(request, server.requestIP(request)?.address ?? '');
       if (url.pathname === '/api/auth/login' && request.method === 'POST') {
@@ -115,6 +117,20 @@ export const server = Bun.serve<SocketData>({
         if (request.method !== 'GET' && !sameOrigin(request)) throw new InputError('Недопустимый источник запроса', 403);
         const user = await auth.resolve(request);
         if (!user) return url.pathname.startsWith('/app') ? Response.redirect(new URL('/login', config.auth.origin), 303) : json({ error: 'Войдите в аккаунт' }, { status: 401 });
+        if (url.pathname === '/api/profile') {
+          if (request.method === 'GET') return json(await auth.profile(user));
+          if (request.method === 'PATCH') return await auth.updateProfile(user, await request.json());
+          return new Response('Method not allowed', { status: 405 });
+        }
+        if (url.pathname === '/api/auth/password' && request.method === 'POST') {
+          if (!loginAllowed('password:' + user.id)) throw new InputError('Слишком много попыток. Повторите через 15 минут', 429);
+          const response = await auth.changePassword(user, await request.json());
+          for (const pending of rooms.values()) {
+            const room = await pending;
+            for (const ws of room.sockets) if (ws.data.user.id === user.id) ws.close(4001, 'Пароль изменён. Войдите заново');
+          }
+          return response;
+        }
         if (url.pathname === '/api/waitlist') {
           if (!canUsePersonal(user)) throw new InputError('Недоступно', 403);
           return json(waitlist.list());
