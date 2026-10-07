@@ -15,6 +15,11 @@ let ws;
 let activeProject = "";
 let projectList = [];
 let documentsTimer;
+let currentView = "projects";
+let personalSourceAvailable = false;
+let uploadBusy = false;
+let micStarting = false;
+let routeVersion = 0;
 let mic = null; // { stream, context } while this tab owns the microphone
 let quietTimer;
 
@@ -139,14 +144,6 @@ function buildEmpty() {
     el("h1", "slide-title", "Говорите — слайды соберутся сами"),
     el("p", "slide-sub", "Речь распознаётся на лету, мысли становятся слайдами, а формулировки и факты подтягиваются из вашей базы знаний."),
   );
-  const keys = root.appendChild(el("dl", "keys"));
-  for (const [key, action] of [
-    ["Пробел", "начать или остановить запись"],
-    ["N", "новый слайд прямо сейчас"],
-    ["← →", "листать слайды, L — вернуться к живому"],
-    ["F", "на весь экран"],
-    ["D", "тёмная тема, T — скрыть ленту речи"],
-  ]) keys.append(el("dt", "", key), el("dd", "", action));
   return root;
 }
 
@@ -204,7 +201,7 @@ function renderStage({ before = null, enter = false } = {}) {
   }));
 
   const away = state.view !== null && state.view < state.slides.length - 1;
-  $("away").hidden = !away;
+  $("away").hidden = currentView !== "presentation" || !away;
   if (away) $("away-text").textContent = `Вы на слайде ${state.view + 1} из ${state.slides.length}`;
   $("download").toggleAttribute("hidden", state.slides.length === 0);
 }
@@ -234,6 +231,9 @@ function renderStatus() {
     return li;
   };
   const { stt, slides, sources } = status;
+  const text = stt.state === "error" ? "Ошибка распознавания" : slides.state === "error" ? "Ошибка создания слайда" : sources.state === "error" ? "Источник временно недоступен" : slides.state === "working" ? "Собираю слайд…" : sources.state === "working" ? "Ищу в материалах…" : state.listening ? "Идёт запись" : "Готов к выступлению";
+  $("presentation-status").textContent = text;
+  $("presentation-status").classList.toggle("error", [stt, slides, sources].some(item => item.state === "error"));
   const model = slides.model.split("/").pop().replace(/-subscription$/, "");
   const rows = [
     row("Речь", stt.state === "error" ? "error" : stt.state === "ready" ? "ok" : stt.state === "connecting" ? "working" : "idle",
@@ -273,7 +273,7 @@ function renderListening() {
   const elsewhere = state.listening && !mic;
   button.setAttribute("aria-pressed", String(state.listening && !!mic));
   button.disabled = elsewhere;
-  $("mic-label").textContent = elsewhere ? "Запись идёт в другой вкладке" : state.listening ? "Остановить" : "Слушать";
+  $("mic-label").textContent = elsewhere ? "Запись идёт в другой вкладке" : state.listening ? "Остановить запись" : "Начать запись";
   $("engine").disabled = state.listening;
   wake();
 }
@@ -283,7 +283,7 @@ function send(message) {
 }
 
 function connect() {
-  if (!activeProject) return;
+  if (!activeProject || currentView !== "presentation") return;
   const socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?project=${encodeURIComponent(activeProject)}`);
   ws = socket;
   socket.onopen = () => { if (ws === socket) $("mic").disabled = false; };
@@ -350,13 +350,20 @@ function connect() {
     renderListening();
     $("mic").disabled = true;
     if (event.code === 4001) { location.href = "/login"; return; }
-    $("chain").replaceChildren(Object.assign(el("li", "is-error"), { textContent: "Нет связи с сервером. Переподключение…" }));
-    setTimeout(() => { if (ws === socket && activeProject) connect(); }, 1000);
+    $("presentation-status").textContent = "Нет связи. Переподключение…";
+    $("presentation-status").classList.add("error");
+    setTimeout(() => { if (ws === socket && activeProject && currentView === "presentation") connect(); }, 1000);
   };
 }
 
 async function startMic() {
+  if (micStarting) return;
+  micStarting = true;
+  const project = activeProject;
+  const socket = ws;
   let stream;
+  let context;
+  try {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -367,13 +374,16 @@ async function startMic() {
         ? "Браузер не дал доступ к микрофону. Разрешите его в настройках сайта и нажмите «Слушать» ещё раз."
         : `Микрофон недоступен: ${error.message}`,
     }));
+    $("presentation-status").textContent = "Нет доступа к микрофону — подробности в меню";
     return;
   }
-  const context = new AudioContext({ sampleRate: 16000 });
+  if (currentView !== "presentation" || activeProject !== project || ws !== socket) { stream.getTracks().forEach(track => track.stop()); return; }
+  context = new AudioContext({ sampleRate: 16000 });
   await context.audioWorklet.addModule("/pcm-worklet.js");
+  if (currentView !== "presentation" || activeProject !== project || ws !== socket) { stream.getTracks().forEach(track => track.stop()); void context.close(); return; }
   const node = new AudioWorkletNode(context, "pcm");
   node.port.onmessage = ({ data }) => {
-    if (ws.readyState === WebSocket.OPEN) ws.send(data.pcm);
+    if (ws === socket && mic && socket.readyState === WebSocket.OPEN) socket.send(data.pcm);
     $("mic-level").style.setProperty("--level", Math.min(1, data.level * 6).toFixed(2));
   };
   context.createMediaStreamSource(stream).connect(node);
@@ -382,9 +392,11 @@ async function startMic() {
   mute.gain.value = 0;
   node.connect(mute).connect(context.destination);
   mic = { stream, context };
-  $("projects-panel").hidden = true;
+
   localStorage.setItem("engine", $("engine").value);
   send({ type: "start", engine: $("engine").value });
+  } catch { stream?.getTracks().forEach(track => track.stop()); void context?.close(); $("presentation-status").textContent = "Не удалось включить микрофон"; }
+  finally { micStarting = false; }
 }
 
 function releaseMic() {
@@ -408,7 +420,7 @@ function toggleMic() {
 function wake() {
   document.body.classList.remove("quiet");
   clearTimeout(quietTimer);
-  if (state.listening) quietTimer = setTimeout(() => document.body.classList.add("quiet"), 3000);
+  if (state.listening && currentView === "presentation") quietTimer = setTimeout(() => document.body.classList.add("quiet"), 3000);
 }
 
 function setTheme(theme) {
@@ -421,7 +433,7 @@ $("new-slide").onclick = () => send({ type: "new-slide" });
 $("variants").onclick = () => send({ type: "variants", on: !state.variants });
 $("back-live").onclick = () => go(state.slides.length - 1);
 $("reset").onclick = () => {
-  if (confirm("Начать новую сессию? Слайды и текст этой сессии останутся в папке data/sessions.")) {
+  if (confirm("Начать новую сессию? Текущие слайды и расшифровка сохранятся.")) {
     if (mic) releaseMic();
     send({ type: "reset" });
   }
@@ -429,8 +441,8 @@ $("reset").onclick = () => {
 
 document.addEventListener("pointermove", wake);
 document.addEventListener("keydown", (event) => {
-  if (event.metaKey || event.ctrlKey || event.altKey || event.target.matches("select, input, textarea")) return;
-  if (event.code === "Space" && event.target.closest("button, a")) return; // the focused control handles it
+  if (currentView !== "presentation" || document.querySelector("dialog[open]") || event.metaKey || event.ctrlKey || event.altKey || event.target.matches("select, input, textarea")) return;
+  if (event.code === "Space" && event.target.closest("button, a, summary")) return; // the focused control handles it
   wake();
   const index = state.view ?? state.slides.length - 1;
   switch (event.code) {
@@ -442,7 +454,7 @@ document.addEventListener("keydown", (event) => {
     case "KeyL": case "End": go(state.slides.length - 1); break;
     case "KeyF": document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); break;
     case "KeyD": setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"); break;
-    case "KeyT": $("tape").hidden = !$("tape").hidden; break;
+    case "KeyT": toggleTape(); break;
   }
 });
 
@@ -459,53 +471,112 @@ async function api(path, options = {}) {
 }
 
 async function initProjects() {
-  $("mic").disabled = true;
   try {
     const me = await api("/api/me");
     $("account-name").textContent = me.name;
     $("logout").hidden = !me.localAccount;
-    $("personal-source-label").hidden = !me.personalSourceAvailable;
+    personalSourceAvailable = me.personalSourceAvailable;
+    $("personal-source-label").hidden = !personalSourceAvailable;
     await loadProjects();
-    const requested = new URL(location.href).searchParams.get("project");
-    const first = projectList.find(p => p.id === requested) ?? projectList[0];
-    if (first) chooseProject(first.id);
-    else $("project-message").textContent = "Создайте проект и загрузите материалы для слайдов.";
-  } catch (error) { $("project-message").textContent = error.message; }
+    await restoreRoute();
+  } catch (error) { $("projects-message").textContent = error.message; }
 }
 async function loadProjects() {
   projectList = await api("/api/projects");
-  $("project-select").replaceChildren(new Option("Выберите проект", ""), ...projectList.map(p => new Option(p.name, p.id)));
-  $("project-select").value = activeProject;
+  renderProjects();
 }
-function chooseProject(id) {
-  if (mic) releaseMic();
-  const previous = ws;
-  ws = null;
-  previous?.close();
+function renderProjects() {
+  const cards = projectList.map(project => {
+    const card = el("article", "project-card");
+    card.append(el("h2", "", project.name), el("p", "muted", `Документов: ${project.document_count ?? 0} · готово: ${project.ready_count ?? 0}`),
+      el("p", "muted", project.personal_source ? "Документы и моя база знаний" : "Документы проекта"));
+    const actions = el("div", "card-actions");
+    const present = el("button", "primary", "Начать выступление");
+    const settings = el("button", "", "Настроить");
+    present.type = settings.type = "button";
+    present.onclick = () => navigate("presentation", project.id);
+    settings.onclick = () => navigate("settings", project.id);
+    actions.append(present, settings); card.append(actions);
+    return card;
+  });
+  if (!cards.length) {
+    const empty = el("div", "empty-projects");
+    empty.append(el("h2", "", "Ваш первый проект"), el("p", "muted", "Соберите материалы для доклада в одном месте."));
+    const button = el("button", "primary", "Создать проект"); button.type = "button"; button.onclick = openCreate;
+    empty.append(button); cards.push(empty);
+  }
+  $("project-list").replaceChildren(...cards);
+}
+function disconnect() {
+  if (mic) { releaseMic(); send({ type: "stop" }); }
+  const previous = ws; ws = null; previous?.close();
+  state.listening = false;
+  clearTimeout(quietTimer);
+  document.body.classList.remove("quiet", "listening");
+}
+async function navigate(view, id = "", push = true) {
+  const version = ++routeVersion;
+  const project = projectList.find(p => p.id === id);
+  if (view !== "projects" && !project) { view = "projects"; id = ""; }
+  if (currentView === "presentation" && (view !== "presentation" || id !== activeProject)) disconnect();
   clearTimeout(documentsTimer);
-  activeProject = id;
+  if (id !== activeProject) {
+    disconnect();
+    state.slides = []; state.finals = []; state.partial = ""; state.paths = []; state.view = null; state.status = null; state.variants = false;
+  }
+  activeProject = id; currentView = view;
   const url = new URL(location.href);
-  id ? url.searchParams.set("project", id) : url.searchParams.delete("project");
-  history.replaceState(null, "", url);
-  $("project-select").value = id;
-  const selectedName = projectList.find(p => p.id === id)?.name;
-  $("projects-toggle").textContent = selectedName ? `Проект: ${selectedName.slice(0, 24)}${selectedName.length > 24 ? "…" : ""}` : "Проекты";
-  $("projects-toggle").title = selectedName ?? "Проекты";
-  $("project-documents").hidden = !id;
-  $("download").href = `/api/deck.md?project=${encodeURIComponent(id)}`;
-  state.slides = []; state.finals = []; state.partial = ""; state.paths = []; state.view = null; state.listening = false;
-  renderStage(); renderTape(); renderListening();
-  $("mic").disabled = true;
-  $("project-source-note").textContent = projectList.find(p => p.id === id)?.personal_source
-    ? "Источники: документы проекта и моя база знаний." : "Источники: документы этого проекта.";
+  url.search = "";
+  if (id) { url.searchParams.set("project", id); url.searchParams.set("view", view); }
+  if (push && url.href !== location.href) history.pushState(null, "", url);
+  else if (!push) history.replaceState(null, "", url);
+  document.body.dataset.view = view;
+  $("workspace-header").hidden = view === "presentation";
+  for (const name of ["projects", "settings", "presentation"]) $(`${name}-view`).hidden = view !== name;
+  $("bar").hidden = view !== "presentation";
+  $("tape").hidden = true;
+  $("tape-toggle").textContent = "Показать расшифровку";
+  $("tape-toggle").setAttribute("aria-pressed", "false");
+  $("away").hidden = true;
+  $("presentation-menu").open = false;
   $("project-message").textContent = "";
-  if (id) { void loadDocuments(id); connect(); }
+  if (view === "projects") {
+    $("projects-title").focus();
+    try { await loadProjects(); } catch (error) { if (version === routeVersion) $("projects-message").textContent = error.message; }
+    return;
+  }
+  $("presentation-name").textContent = project.name;
+  $("settings-title").textContent = project.name;
+  $("download").href = `/api/deck.md?project=${encodeURIComponent(id)}`;
+  if (view === "settings") {
+    $("project-settings").elements.name.value = project.name;
+    $("project-settings").elements.personalSource.checked = project.personal_source;
+    $("project-source-note").textContent = "Загруженные документы используются только в этом проекте.";
+    $("settings-title").focus();
+    $("documents-list").replaceChildren(el("li", "muted", "Загружаю документы…"));
+    void loadDocuments(id);
+  } else {
+    renderStage(); renderTape(); renderListening();
+    $("mic").disabled = ws?.readyState !== WebSocket.OPEN;
+    $("presentation-status").textContent = "Подключаюсь…";
+    if (!ws) connect();
+  }
 }
+async function restoreRoute() {
+  const url = new URL(location.href);
+  const id = url.searchParams.get("project") ?? "";
+  const view = url.searchParams.get("view") === "settings" ? "settings" : id ? "presentation" : "projects";
+  await navigate(view, id, false);
+}
+window.addEventListener("popstate", () => { void restoreRoute(); });
 async function loadDocuments(id) {
   try {
     const documents = await api(`/api/projects/${id}/documents`);
-    if (id !== activeProject) return;
-    const names = { queued: "В очереди", processing: "Распознаётся и индексируется", ready: "Готов", error: "Ошибка" };
+    if (id !== activeProject || currentView !== "settings") return;
+    const names = { queued: "В очереди", processing: "Обрабатывается…", ready: "Готов", error: "Ошибка" };
+    $("documents-count").textContent = `Всего: ${documents.length}`;
+    const project = projectList.find(p => p.id === id);
+    if (project) { project.document_count = documents.length; project.ready_count = documents.filter(d => d.status === "ready").length; }
     const rows = documents.map(doc => {
       const li = el("li", "document-row");
       li.append(el("span", "document-name", doc.name), el("span", `document-status ${doc.status}`, names[doc.status]));
@@ -515,44 +586,69 @@ async function loadDocuments(id) {
         button.onclick = async () => {
           button.disabled = true;
           try { await api(`/api/projects/${id}/documents/${doc.id}/retry`, { method: "POST" }); await loadDocuments(id); }
-          catch (error) { $("project-message").textContent = error.message; button.disabled = false; }
+          catch (error) { if (id === activeProject && currentView === "settings") $("project-message").textContent = error.message; button.disabled = false; }
         };
         li.append(button);
       }
       return li;
     });
-    $("documents-list").replaceChildren(...(rows.length ? rows : [el("li", "documents-hint", "Документов пока нет. Загрузите первые материалы.")]));
+    $("documents-list").replaceChildren(...(rows.length ? rows : [el("li", "muted", "Документов пока нет. Добавьте первые материалы.")]));
     clearTimeout(documentsTimer);
-    documentsTimer = setTimeout(() => loadDocuments(id), 3000);
-  } catch (error) { if (id === activeProject) $("project-message").textContent = error.message; }
+    if (documents.some(doc => ["queued", "processing"].includes(doc.status))) documentsTimer = setTimeout(() => loadDocuments(id), 3000);
+  } catch (error) { if (id === activeProject && currentView === "settings") $("project-message").textContent = error.message; }
 }
-$("project-select").onchange = event => chooseProject(event.target.value);
-$("projects-toggle").onclick = () => { $("projects-panel").hidden = !$("projects-panel").hidden; };
+function openCreate() { $("create-message").textContent = ""; $("create-dialog").showModal(); }
+$("create-open").onclick = openCreate;
+$("create-close").onclick = () => $("create-dialog").close();
 $("project-create").onsubmit = async event => {
   event.preventDefault();
   const form = event.target;
-  const button = form.querySelector("button"); button.disabled = true;
+  const button = form.querySelector('button[type="submit"]'); button.disabled = true;
   try {
-    const project = await api("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: form.elements.name.value, personalSource: form.elements.personalSource.checked }) });
-    form.reset(); await loadProjects(); chooseProject(project.id);
-  } catch (error) { $("project-message").textContent = error.message; }
+    const project = await api("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.elements.name.value }) });
+    form.reset(); $("create-dialog").close(); await loadProjects(); await navigate("settings", project.id);
+  } catch (error) { $("create-message").textContent = error.message; }
   finally { button.disabled = false; }
 };
-$("document-files").onchange = async event => {
-  const input = event.target;
-  const files = [...input.files];
+$("project-settings").onsubmit = async event => {
+  event.preventDefault();
   const id = activeProject;
-  input.disabled = true;
+  const form = event.target; const button = form.querySelector("button"); button.disabled = true;
+  try {
+    await api(`/api/projects/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.elements.name.value, personalSource: personalSourceAvailable && form.elements.personalSource.checked }) });
+    await loadProjects();
+    if (id === activeProject && currentView === "settings") { $("settings-title").textContent = projectList.find(p => p.id === id).name; $("project-message").textContent = "Настройки сохранены."; }
+  } catch (error) { if (id === activeProject) $("project-message").textContent = error.message; }
+  finally { button.disabled = false; }
+};
+async function uploadFiles(files) {
+  if (uploadBusy || !activeProject || currentView !== "settings" || !files.length) return;
+  const id = activeProject; uploadBusy = true;
+  $("document-files").disabled = $("upload-open").disabled = true;
   try {
     for (const file of files) {
       if (file.size > 20 * 1024 * 1024) throw new Error("Файл должен быть не больше 20 МБ");
       if (id === activeProject) $("project-message").textContent = `Загрузка: ${file.name}`;
       const form = new FormData(); form.append("file", file);
       await api(`/api/projects/${id}/documents`, { method: "POST", body: form });
+      if (id === activeProject) await loadDocuments(id);
     }
-    if (id === activeProject) { $("project-message").textContent = "Документы загружены. Обработка идёт в фоне."; await loadDocuments(id); }
-  } catch (error) { if (id === activeProject) $("project-message").textContent = error.message; }
-  finally { input.value = ""; input.disabled = false; }
-};
+    if (id === activeProject && currentView === "settings") $("project-message").textContent = "Документы загружены. Обработка идёт в фоне.";
+  } catch (error) { if (id === activeProject && currentView === "settings") $("project-message").textContent = error.message; }
+  finally { $("document-files").value = ""; $("document-files").disabled = $("upload-open").disabled = false; uploadBusy = false; }
+}
+$("upload-open").onclick = () => $("document-files").click();
+$("document-files").onchange = event => { void uploadFiles([...event.target.files]); };
+for (const type of ["dragenter", "dragover"]) $("upload-zone").addEventListener(type, event => { event.preventDefault(); $("upload-zone").classList.add("dragover"); });
+for (const type of ["dragleave", "drop"]) $("upload-zone").addEventListener(type, event => { event.preventDefault(); $("upload-zone").classList.remove("dragover"); if (type === "drop") void uploadFiles([...event.dataTransfer.files]); });
+$("settings-back").onclick = $("presentation-back").onclick = () => navigate("projects");
+$("settings-present").onclick = () => navigate("presentation", activeProject);
+$("presentation-settings").onclick = () => navigate("settings", activeProject);
+function toggleTape() { $("tape").hidden = !$("tape").hidden; $("tape-toggle").textContent = $("tape").hidden ? "Показать расшифровку" : "Скрыть расшифровку"; $("tape-toggle").setAttribute("aria-pressed", String(!$("tape").hidden)); }
+$("tape-toggle").onclick = toggleTape;
+$("theme-toggle").onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+$("fullscreen").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+$("shortcuts-open").onclick = () => { $("presentation-menu").open = false; $("shortcuts-dialog").showModal(); };
+$("shortcuts-close").onclick = () => $("shortcuts-dialog").close();
+document.addEventListener("click", event => { if (!event.target.closest("#presentation-menu")) $("presentation-menu").open = false; });
 $("logout").onclick = async () => { await api("/api/auth/logout", { method: "POST" }); location.href = "/login"; };

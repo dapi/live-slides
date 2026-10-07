@@ -119,6 +119,16 @@ suite('PostgreSQL isolation and durable document pipeline', () => {
     expect(second.slides).toHaveLength(0);
     const resumed = await Session.resumeLatest(() => {}, { ...shared, root: join(root, 'first') });
     expect(resumed.slides[0]?.title).toBe('private first project');
+    // Selecting an empty new session must not resurrect an older deck, even when its
+    // ID sorts first. Project sessions also survive a break longer than twelve hours.
+    const { utimes } = await import('node:fs/promises');
+    await utimes(join(first.dir, 'deck.json'), new Date(0), new Date(0));
+    const longBreak = await Session.resumeLatest(() => {}, { ...shared, root: join(root, 'first'), resumeWithinMs: Infinity });
+    expect(longBreak.slides[0]?.title).toBe('private first project');
+    const empty = new Session(() => {}, 'aaa-new-session', { ...shared, root: join(root, 'first') });
+    await empty.activate();
+    const selected = await Session.resumeLatest(() => {}, { ...shared, root: join(root, 'first'), resumeWithinMs: Infinity });
+    expect(selected.id).toBe(empty.id); expect(selected.slides).toHaveLength(0);
     await rm(root, { recursive: true, force: true });
   });
 });

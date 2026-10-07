@@ -19,13 +19,31 @@ await db.sql`SELECT id FROM projects LIMIT 0`;
 await db.sql`SELECT has_pending_documents FROM app_users LIMIT 0`;
 const auth = new Auth(db);
 const knowledge = new Knowledge(db);
-const api = new ProjectApi(db, knowledge);
+const api = new ProjectApi(db, knowledge, changeProject);
 const waitlist = await Waitlist.open();
 if (config.llm.keyPassEntry && !process.env.LLM_API_KEY) config.llm.apiKey = await secret('LLM_API_KEY', config.llm.keyPassEntry);
 
 type SocketData = { user: User; project: Project; room: Room; request: Request; checkedAt: number; expiresAt: number; timer?: ReturnType<typeof setInterval> };
 type Room = { key: string; session: Session; context: SessionContext; mic: ServerWebSocket<SocketData> | null; sockets: Set<ServerWebSocket<SocketData>>; busy: boolean };
 const rooms = new Map<string, Promise<Room>>();
+
+async function changeProject(user: User, project: Project, update: () => Promise<Project>): Promise<Project> {
+  const key = `${user.id}:${project.id}`;
+  const pending = rooms.get(key);
+  const room = pending ? await pending : null;
+  if (room?.busy || room?.session.listening) throw new InputError('Остановите запись в других вкладках перед изменением настроек', 409);
+  if (room) room.busy = true;
+  try {
+    const saved = await update();
+    // Reopen the saved deck with the new source set; never reset the presentation.
+    if (room) {
+      await room.session.stop();
+      rooms.delete(key);
+      for (const socket of room.sockets) socket.close(4002, 'Настройки проекта изменены');
+    }
+    return saved;
+  } finally { if (room) room.busy = false; }
+}
 
 async function roomFor(user: User, project: Project): Promise<Room> {
   const key = `${user.id}:${project.id}`;
@@ -35,11 +53,13 @@ async function roomFor(user: User, project: Project): Promise<Room> {
       const personal = project.personal_source && canUsePersonal(user);
       const context: SessionContext = {
         root: join(config.dataDir, 'users', user.id, 'projects', project.id, 'sessions'),
+        resumeWithinMs: Infinity,
         sources: [knowledge.source(user.id, project.id), ...(personal ? [new Sources(), new SiteSearch()] : [])],
         places: ['Документы проекта', ...(personal ? config.sources.scopes : [])],
       };
       const room = { key, context, mic: null, busy: false, sockets: new Set() } as Room;
       room.session = await Session.resumeLatest(message => broadcast(room, message), context);
+      await room.session.activate();
       return room;
     })();
     rooms.set(key, pending);
@@ -165,6 +185,7 @@ export const server = Bun.serve<SocketData>({
             if (room.mic && room.mic !== ws) break;
             room.mic = null; await room.session.stop();
             room.session = new Session(message => broadcast(room, message), undefined, room.context);
+            await room.session.activate();
             broadcast(room, snapshot(room, ws.data.user)); break;
         }
       } finally { room.busy = false; }
@@ -176,7 +197,8 @@ export const server = Bun.serve<SocketData>({
       if (ws === room.mic) { room.mic = null; void room.session.stop(); }
       if (!room.sockets.size) {
         // Drop caches and in-memory speech when the last tab leaves; disk is tenant-scoped.
-        rooms.delete(room.key);
+        const pending = rooms.get(room.key);
+        void pending?.then(current => { if (current === room && !room.sockets.size && rooms.get(room.key) === pending) rooms.delete(room.key); });
       }
     },
   },

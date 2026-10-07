@@ -24,7 +24,7 @@ export interface Status {
 
 export type Broadcast = (message: Record<string, unknown>) => void;
 
-export interface SessionContext { sources: Source[]; places: string[]; root: string }
+export interface SessionContext { sources: Source[]; places: string[]; root: string; resumeWithinMs?: number }
 function localContext(): SessionContext {
   const sources = new Sources();
   const site = new SiteSearch();
@@ -116,10 +116,13 @@ export class Session {
   static async resumeLatest(broadcast: Broadcast, context = localContext()): Promise<Session> {
     const root = context.root;
     const ids = await readdir(root).catch(() => [] as string[]);
-    for (const id of ids.sort().reverse()) {
+    const current = await Bun.file(join(root, 'current.json')).json().catch(() => null) as { session?: string } | null;
+    const ordered = ids.sort().reverse();
+    if (current?.session && ids.includes(current.session)) ordered.splice(0, 0, ...ordered.splice(ordered.indexOf(current.session), 1));
+    for (const id of ordered) {
       const deckFile = Bun.file(join(root, id, "deck.json"));
       const age = Date.now() - (await stat(join(root, id, "deck.json")).catch(() => null))?.mtimeMs!;
-      if (!(await deckFile.exists()) || !(age < RESUME_WITHIN_MS)) continue;
+      if (!(await deckFile.exists()) || !(age < (context.resumeWithinMs ?? RESUME_WITHIN_MS))) continue;
       try {
         const { slides } = (await deckFile.json()) as { slides: Slide[] };
         const session = new Session(broadcast, id, context);
@@ -132,6 +135,12 @@ export class Session {
       }
     }
     return new Session(broadcast, undefined, context);
+  }
+
+  /** Persist the selected session even when a new deck is still empty. */
+  async activate(): Promise<void> {
+    await this.saveDeck();
+    await Bun.write(join(this.dir, '..', 'current.json'), JSON.stringify({ session: this.id }));
   }
 
   snapshot() {

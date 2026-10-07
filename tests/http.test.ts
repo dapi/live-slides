@@ -71,6 +71,21 @@ suite('HTTP and WebSocket tenant boundary', () => {
     const list = await (await request('/api/projects', cookieB)).json();
     expect(list.map((p: any) => p.id)).toEqual([b]);
   });
+  test('project settings stay tenant-scoped and reject private connector changes', async () => {
+    expect((await request('/api/projects/' + a, cookieB, 'PATCH', { name: 'forged', personalSource: false })).status).toBe(404);
+    expect((await request('/api/projects/' + a, cookieA, 'PATCH', { name: 'private', personalSource: true })).status).toBe(403);
+    expect((await request('/api/projects/' + a, cookieA, 'PATCH', { name: ' ', personalSource: false })).status).toBe(400);
+    const sa = await socket(a, cookieA);
+    const closed = new Promise<number>(resolve => { sa.ws.onclose = event => resolve(event.code); });
+    const saved = await request('/api/projects/' + a, cookieA, 'PATCH', { name: 'Renamed project', personalSource: false });
+    expect(saved.status).toBe(200); expect((await saved.json()).name).toBe('Renamed project');
+    expect(await closed).toBe(4002);
+    const reopened = await socket(a, cookieA);
+    expect(reopened.state.session).toBe(sa.state.session);
+    reopened.ws.close();
+    const list = await (await request('/api/projects', cookieA)).json();
+    expect(list[0].document_count).toBe(0); expect(list[0].ready_count).toBe(0);
+  });
   test('private connector requires verified Corp cookie, never a password account', async () => {
     expect((await request('/api/projects', cookieA, 'POST', { name: 'private connector', personalSource: true })).status).toBe(403);
     const me = await (await request('/api/me', 'synthetic-corp=verified')).json();
@@ -79,6 +94,15 @@ suite('HTTP and WebSocket tenant boundary', () => {
     expect(created.status).toBe(201);
     const project = await created.json();
     expect((await request('/api/projects/' + project.id + '/documents', cookieA)).status).toBe(404);
+    const ownerSocket = await socket(project.id, 'synthetic-corp=verified');
+    expect(ownerSocket.state.status.sources.scopes.length).toBeGreaterThan(1);
+    const closed = new Promise<number>(resolve => { ownerSocket.ws.onclose = event => resolve(event.code); });
+    expect((await request('/api/projects/' + project.id, 'synthetic-corp=verified', 'PATCH', { name: 'Owner project', personalSource: false })).status).toBe(200);
+    expect(await closed).toBe(4002);
+    const updated = await socket(project.id, 'synthetic-corp=verified');
+    expect(updated.state.status.sources.scopes).toEqual(['Документы проекта']);
+    expect(updated.state.session).toBe(ownerSocket.state.session);
+    updated.ws.close();
     const [owner] = await db.sql`SELECT id FROM app_users WHERE subject = 'corp:owner'`;
     await db.as(owner.id, tx => tx`DELETE FROM projects WHERE id = ${project.id}`);
   });

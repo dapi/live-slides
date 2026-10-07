@@ -10,61 +10,73 @@
   <link rel="stylesheet" href="/slide.css">
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
-  <header class="bar" id="bar">
-    <button class="mic" id="mic" type="button" aria-pressed="false">
-      <span class="mic-level" id="mic-level" aria-hidden="true"></span>
-      <span id="mic-label">Слушать</span>
-    </button>
-    <label class="engine">
-      <span class="visually-hidden">Где распознавать речь</span>
-      <select id="engine">
-        <option value="elevenlabs">ElevenLabs, в облаке</option>
-        <option value="whisper">Whisper, на этом Mac</option>
-      </select>
-    </label>
-    <ul class="chain" id="chain" aria-live="polite"></ul>
-    <div class="bar-actions">
-      <button type="button" id="projects-toggle">Проекты</button>
-      <button type="button" id="new-slide" title="Клавиша N">Новый слайд</button>
-      <button type="button" id="variants" title="Три направления, куда может пойти доклад. Клавиша V" aria-pressed="false">Варианты</button>
-      <a id="download" href="/api/deck.md" title="Все слайды сессии в Markdown">Скачать</a>
-      <button type="button" id="reset">Новая сессия</button>
-      <a id="waitlist" href="/api/waitlist" title="Заявки на ранний доступ с главной страницы" hidden></a>
-    </div>
+<body data-view="projects">
+  <header class="workspace-header" id="workspace-header">
+    <a class="brand" href="/app/">Живые слайды</a>
+    <div class="account"><span id="account-name"></span><button type="button" id="logout" hidden>Выйти</button></div>
   </header>
 
-  <section class="projects-panel" id="projects-panel" aria-label="Проекты и документы">
-    <div class="projects-heading"><h2>Мои проекты</h2><span id="account-name"></span><button type="button" id="logout">Выйти</button></div>
-    <label>Проект <select id="project-select"><option value="">Выберите проект</option></select></label>
-    <form id="project-create">
-      <label>Новый проект <input name="name" maxlength="120" required placeholder="Например, доклад о продукте"></label>
-      <label id="personal-source-label" hidden><input type="checkbox" name="personalSource"> Подключить мою базу знаний</label>
-      <button type="submit">Создать проект</button>
-    </form>
-    <div id="project-documents" hidden>
-      <p id="project-source-note"></p>
-      <label class="upload-button">Загрузить документы <input id="document-files" type="file" accept=".txt,.pdf,.doc,.docx" multiple></label>
-      <p class="documents-hint">TXT (UTF-8), PDF, DOC, DOCX — до 20 МБ. PDF: до 60 страниц, включая сканы. Слайды используют документы со статусом «Готов» только из выбранного проекта.</p>
-      <ul id="documents-list"></ul>
-    </div>
-    <p id="project-message" role="status" aria-live="polite"></p>
-  </section>
-
-  <main class="room">
-    <nav class="rail" id="rail" aria-label="Слайды"></nav>
-    <section class="stage" id="stage" aria-live="polite"></section>
+  <main class="workspace" id="projects-view" aria-labelledby="projects-title">
+    <div class="page-heading"><div><p class="eyebrow">Ваше пространство</p><h1 id="projects-title" tabindex="-1">Мои проекты</h1><p class="muted">Материалы и выступления — каждый в своём проекте.</p></div><button class="primary" id="create-open" type="button">+ Новый проект</button></div>
+    <p id="projects-message" role="status"></p>
+    <div class="project-grid" id="project-list"></div>
   </main>
 
-  <p class="away" id="away" hidden>
-    <span id="away-text"></span>
-    <button type="button" id="back-live">Вернуться к живому слайду</button>
-  </p>
+  <main class="workspace" id="settings-view" aria-labelledby="settings-title" hidden>
+    <button class="back-link" id="settings-back" type="button">← Мои проекты</button>
+    <div class="page-heading"><div><p class="eyebrow">Настройки проекта</p><h1 id="settings-title" tabindex="-1"></h1><p class="muted">Подготовьте материалы, затем переходите к выступлению.</p></div><button class="primary" id="settings-present" type="button">Начать выступление →</button></div>
+    <div class="settings-grid">
+      <section class="surface documents-section" aria-labelledby="documents-title">
+        <div class="section-heading"><h2 id="documents-title">Документы</h2><span class="muted" id="documents-count"></span></div>
+        <div id="upload-zone" class="upload-zone">
+          <p>Перетащите сюда материалы для выступления</p>
+          <button type="button" id="upload-open">Выбрать документы</button>
+          <input hidden id="document-files" type="file" accept=".txt,.pdf,.doc,.docx" multiple aria-label="Выбрать документы">
+          <p class="documents-hint">TXT, PDF, DOC, DOCX · до 20 МБ на файл</p>
+        </div>
+        <ul id="documents-list"></ul>
+        <details class="help-details"><summary>Как используются материалы</summary><p class="muted">Слайды используют готовые документы этого проекта. Обработка идёт в фоне. PDF — до 60 страниц, включая сканы; TXT — в UTF-8.</p></details>
+      </section>
+      <section class="surface" aria-labelledby="project-options-title">
+        <h2 id="project-options-title">Проект и источники</h2>
+        <form id="project-settings" class="stack-form">
+          <label>Название проекта<input name="name" maxlength="120" required></label>
+          <p class="muted" id="project-source-note"></p>
+          <label class="checkbox-label" id="personal-source-label" hidden><input type="checkbox" name="personalSource"><span>Использовать мою базу знаний<small>Личный источник доступен только вашему аккаунту.</small></span></label>
+          <button type="submit">Сохранить настройки</button>
+        </form>
+      </section>
+    </div>
+    <p id="project-message" role="status" aria-live="polite"></p>
+  </main>
 
-  <footer class="tape" id="tape" aria-label="Распознанная речь">
-    <p class="tape-line"><span id="tape-final"></span><span id="tape-partial"></span></p>
-  </footer>
+  <header class="bar" id="bar" hidden>
+    <button type="button" id="presentation-back" class="back-link">← Проекты</button>
+    <span class="presentation-name" id="presentation-name"></span>
+    <span class="presentation-status" id="presentation-status" role="status"></span>
+    <div class="bar-actions">
+      <button class="mic" id="mic" type="button" aria-pressed="false" disabled><span class="mic-level" id="mic-level" aria-hidden="true"></span><span id="mic-label">Начать запись</span></button>
+      <button type="button" id="new-slide" title="Клавиша N">Новый слайд</button>
+      <details class="presentation-menu" id="presentation-menu"><summary aria-label="Действия с презентацией">•••</summary><div class="menu-content">
+        <button type="button" id="presentation-settings">Настройки проекта</button>
+        <button type="button" id="variants" aria-pressed="false">Варианты продолжения</button>
+        <button type="button" id="fullscreen">На весь экран</button>
+        <button type="button" id="tape-toggle" aria-pressed="false">Показать расшифровку</button>
+        <button type="button" id="theme-toggle">Сменить тему</button>
+        <button type="button" id="shortcuts-open">Горячие клавиши</button>
+        <a id="download" href="/api/deck.md" hidden>Скачать слайды</a>
+        <button type="button" id="reset">Новая сессия</button>
+        <details class="help-details"><summary>Состояние сервиса</summary><ul class="chain" id="chain" aria-live="polite"></ul><label class="engine">Распознавание<select id="engine"><option value="elevenlabs">ElevenLabs</option><option value="whisper">Whisper</option></select></label></details>
+        <a id="waitlist" href="/api/waitlist" hidden></a>
+      </div></details>
+    </div>
+  </header>
+  <main class="room" id="presentation-view" hidden><nav class="rail" id="rail" aria-label="Слайды"></nav><section class="stage" id="stage" aria-live="polite"></section></main>
+  <p class="away" id="away" hidden><span id="away-text"></span><button type="button" id="back-live">Вернуться к живому слайду</button></p>
+  <footer class="tape" id="tape" aria-label="Распознанная речь" hidden><p class="tape-line"><span id="tape-final"></span><span id="tape-partial"></span></p></footer>
 
+  <dialog id="create-dialog"><form id="project-create" class="stack-form"><div class="section-heading"><h2>Новый проект</h2><button type="button" id="create-close" aria-label="Закрыть">✕</button></div><label>Название<input name="name" maxlength="120" required placeholder="Например, доклад о продукте"></label><p class="muted">После создания добавьте документы и выберите источники в настройках.</p><p id="create-message" role="status"></p><button class="primary" type="submit">Создать проект</button></form></dialog>
+  <dialog id="shortcuts-dialog"><div class="section-heading"><h2>Горячие клавиши</h2><button type="button" id="shortcuts-close" aria-label="Закрыть">✕</button></div><dl class="shortcut-list"><dt>Пробел</dt><dd>Начать или остановить запись</dd><dt>N</dt><dd>Новый слайд</dd><dt>← →</dt><dd>Листать слайды</dd><dt>L</dt><dd>Вернуться к живому слайду</dd><dt>V</dt><dd>Варианты продолжения</dd><dt>F</dt><dd>На весь экран</dd><dt>D</dt><dd>Сменить тему</dd><dt>T</dt><dd>Показать расшифровку</dd></dl></dialog>
   <script type="module" src="/app.js"></script>
 </body>
 </html>
