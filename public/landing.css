@@ -74,10 +74,10 @@ a { color: inherit; }
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "text circle" "demo demo";
-  align-items: center;
-  column-gap: 48px;
+  grid-template-columns: 250px minmax(0, 1fr);
+  grid-template-areas: "text text" "circle demo";
+  align-items: start;
+  column-gap: 40px;
   padding-top: 28px;
 }
 
@@ -107,11 +107,11 @@ h1 {
 
 .circle {
   grid-area: circle;
-  margin: 0;
+  margin: 40px 0 0;
   display: grid;
   justify-items: center;
   gap: 12px;
-  width: min(300px, 30vw);
+  width: 250px;
 }
 
 .circle-button {
@@ -312,9 +312,9 @@ input:focus, textarea:focus { outline: none; border-color: var(--cobalt); box-sh
 @keyframes blink { 50% { opacity: 0; } }
 
 @media (max-width: 760px) {
-  .hero { grid-template-columns: 1fr; grid-template-areas: "text" "circle" "demo"; padding-top: 16px; row-gap: 28px; }
-  .circle { width: 220px; justify-self: start; }
-  .demo { margin-top: 8px; }
+  .hero { grid-template-columns: 1fr; grid-template-areas: "text" "circle" "demo"; padding-top: 16px; row-gap: 24px; }
+  .circle { width: 200px; margin-top: 8px; justify-self: start; }
+  .demo { margin-top: 0; }
   /* The sheet is narrow here: the slide's own units would make its text unreadable. */
   .sheet { aspect-ratio: 4 / 3; }
   .sheet .slide { padding: 7cqw 7cqw 9cqw; }
@@ -338,5 +338,4 @@ input:focus, textarea:focus { outline: none; border-color: var(--cobalt); box-sh
   html { scroll-behavior: auto; }
   .demo.live #demo-partial::after { animation: none; }
 }
-
 #circle[hidden] { display: none; }

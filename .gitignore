@@ -7,3 +7,4 @@ data/
 .envrc.local
 .gitleaks-report*
 *.log
+media/manifest.json
