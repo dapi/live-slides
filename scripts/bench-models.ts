@@ -9,7 +9,8 @@ import { SYSTEM_PROMPT } from "../src/director";
 
 const models = process.argv.slice(2).length
   ? process.argv.slice(2)
-  : ["claude-haiku-subscription", "claude-sonnet-subscription", "claude-opus-subscription", "openrouter-auto"];
+  : (process.env.BENCH_MODELS ?? config.llm.model).split(',').map(model => model.trim()).filter(Boolean);
+if (!models.length) throw new Error('Укажите модели в argv, BENCH_MODELS или LLM_MODEL');
 const RUNS = 3;
 
 const user = `<previous_slides>
