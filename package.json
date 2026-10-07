@@ -1,6 +1,7 @@
 {
   "name": "live-slides",
   "version": "0.2.5",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {
