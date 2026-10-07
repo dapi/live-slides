@@ -148,7 +148,8 @@ body.quiet .bar { opacity: 0; pointer-events: none; }
 
 .rail button[aria-current="true"] { background-image: linear-gradient(var(--cobalt), var(--cobalt)); background-size: 30px 3px; }
 
-/* The paths mode: four cards of one colour on the sheet; now at the top left, three ways on. */
+/* The paths mode: the current points sit plain at the bottom left; three coloured cards
+   around them hold the directions the talk may take. Cards share one colour. */
 
 .cards {
   position: absolute;
@@ -156,8 +157,10 @@ body.quiet .bar { opacity: 0; pointer-events: none; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
+  grid-template-areas: "first second" "now third";
   gap: 1.6cqw;
   padding: 2.6cqw;
+  --card: #e8562a;
 }
 
 .cards.enter { animation: rise 0.4s ease both; }
@@ -165,40 +168,23 @@ body.quiet .bar { opacity: 0; pointer-events: none; }
 .card {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   min-height: 0;
   padding: 2cqw 2.4cqw;
   overflow: hidden;
   border-radius: 2cqw;
-  background: var(--cobalt);
-  color: var(--paper);
+  background: var(--card);
+  color: #fff;
 }
 
-.card-label {
-  margin: 0 0 1cqw;
-  color: var(--marker);
-  font-size: 1.5cqw;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
+.card-path:nth-child(2) { grid-area: first; }
+.card-path:nth-child(3) { grid-area: second; }
+.card-path:nth-child(4) { grid-area: third; }
 
-.card-path .card-label::before {
-  content: "";
-  display: inline-block;
-  width: 1.6cqw;
-  height: 0.3cqw;
-  margin-right: 0.7cqw;
-  vertical-align: middle;
-  background: repeating-linear-gradient(90deg, currentColor 0 0.4cqw, transparent 0.4cqw 0.7cqw);
-}
-
-.card-now .card-label::before {
-  content: "";
-  display: inline-block;
-  width: 1.6cqw;
-  height: 0.3cqw;
-  margin-right: 0.7cqw;
-  vertical-align: middle;
-  background: currentColor;
+.card-now {
+  grid-area: now;
+  background: none;
+  color: var(--ink);
 }
 
 .card h2 {
@@ -212,10 +198,11 @@ body.quiet .bar { opacity: 0; pointer-events: none; }
 }
 
 .card .slide-list li { max-width: none; margin-bottom: 0.8cqw; padding-left: 2.2cqw; font-size: 1.9cqw; }
-.card .slide-list li::before { width: 1.3cqw; height: 0.26cqw; background: var(--paper); opacity: 0.7; }
+.card-path .slide-list li::before { width: 1.3cqw; height: 0.26cqw; background: #fff; opacity: 0.8; }
+.card-now .slide-list li::before { width: 1.3cqw; height: 0.26cqw; }
 
-.card-note { margin: auto 0 0; padding-top: 1cqw; font-size: 1.4cqw; opacity: 0.75; }
-.card-empty { background: color-mix(in srgb, var(--cobalt) 55%, var(--paper)); }
+.card-note { margin: 0; font-size: 1.6cqw; color: var(--mute); }
+.card-empty { background: color-mix(in srgb, var(--card) 45%, var(--paper)); }
 
 /* Empty stage */
 

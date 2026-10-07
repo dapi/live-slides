@@ -155,9 +155,8 @@ function saidPoints(slide) {
   return texts.filter((text) => !slide.predicted.includes(text));
 }
 
-function card(label, title, items, className) {
+function card(title, items, className) {
   const node = el("section", `card ${className}`);
-  node.append(el("p", "card-label", label));
   if (title) node.append(el("h2", "", title));
   if (items.length) {
     const ul = node.appendChild(el("ul", "slide-list"));
@@ -167,23 +166,17 @@ function card(label, title, items, className) {
 }
 
 /**
- * The paths mode: four cards of one colour. The first holds what the speaker is saying now,
- * the other three are directions the talk may take in the next quarter of a minute.
+ * The paths mode: what the speaker is saying now sits plain at the bottom left; around it,
+ * three coloured cards with directions the talk may take in the next quarter of a minute.
  */
-function buildCards(slide, before) {
+function buildCards(slide) {
   const root = el("article", "cards");
-  const now = slide ? card("Сейчас", slide.title, saidPoints(slide), "card-now") : card("Сейчас", "", [], "card-now card-empty");
+  const now = slide ? card(slide.title, saidPoints(slide), "card-now") : card("", [], "card-now");
   if (!slide) now.append(el("p", "card-note", state.listening ? "Слушаю — тезисы появятся по ходу речи" : "Нажмите «Слушать»: здесь будут тезисы того, что вы говорите"));
   root.append(now);
   for (let i = 0; i < 3; i++) {
     const path = state.paths[i];
-    if (path) {
-      const node = card("Дальше", path.title, path.bullets, "card-path");
-      if (path.source) node.append(el("p", "card-note", `Источник: ${path.source.url ? `${path.source.title} — ${new URL(path.source.url).hostname}` : path.source.title}`));
-      root.append(node);
-    } else {
-      root.append(card("Дальше", "", [], "card-path card-empty"));
-    }
+    root.append(path ? card(path.title, path.bullets, "card-path") : card("", [], "card-path card-empty"));
   }
   return root;
 }
