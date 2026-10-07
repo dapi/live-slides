@@ -25,6 +25,7 @@
     </label>
     <ul class="chain" id="chain" aria-live="polite"></ul>
     <div class="bar-actions">
+      <button type="button" id="projects-toggle">Проекты</button>
       <button type="button" id="new-slide" title="Клавиша N">Новый слайд</button>
       <button type="button" id="variants" title="Три направления, куда может пойти доклад. Клавиша V" aria-pressed="false">Варианты</button>
       <a id="download" href="/api/deck.md" title="Все слайды сессии в Markdown">Скачать</a>
@@ -32,6 +33,23 @@
       <a id="waitlist" href="/api/waitlist" title="Заявки на ранний доступ с главной страницы" hidden></a>
     </div>
   </header>
+
+  <section class="projects-panel" id="projects-panel" aria-label="Проекты и документы">
+    <div class="projects-heading"><h2>Мои проекты</h2><span id="account-name"></span><button type="button" id="logout">Выйти</button></div>
+    <label>Проект <select id="project-select"><option value="">Выберите проект</option></select></label>
+    <form id="project-create">
+      <label>Новый проект <input name="name" maxlength="120" required placeholder="Например, доклад о продукте"></label>
+      <label id="personal-source-label" hidden><input type="checkbox" name="personalSource"> Подключить мою базу знаний</label>
+      <button type="submit">Создать проект</button>
+    </form>
+    <div id="project-documents" hidden>
+      <p id="project-source-note"></p>
+      <label class="upload-button">Загрузить документы <input id="document-files" type="file" accept=".txt,.pdf,.doc,.docx" multiple></label>
+      <p class="documents-hint">TXT (UTF-8), PDF, DOC, DOCX — до 20 МБ. PDF: до 60 страниц, включая сканы. Слайды используют документы со статусом «Готов» только из выбранного проекта.</p>
+      <ul id="documents-list"></ul>
+    </div>
+    <p id="project-message" role="status" aria-live="polite"></p>
+  </section>
 
   <main class="room">
     <nav class="rail" id="rail" aria-label="Слайды"></nav>

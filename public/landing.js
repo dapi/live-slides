@@ -23,7 +23,7 @@ const items = [...$("demo-list").children];
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function resetDemo() {
-  $("demo-slide").hidden = true;
+  $("demo-slide").hidden = false;
   $("demo-slide").classList.remove("enter");
   for (const li of items) {
     li.classList.add("ahead");
@@ -35,8 +35,6 @@ function resetDemo() {
 
 function react(event) {
   if (event === "open") {
-    $("demo-slide").hidden = false;
-    $("demo-slide").classList.add("enter");
     return;
   }
   const li = items[event];

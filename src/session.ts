@@ -1,7 +1,7 @@
 import { appendFile, mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { config, type SttEngineName } from "./config";
-import { DIAGRAMS, Director, type Slide, type StepMetric } from "./director";
+import { DIAGRAMS, Director, type Slide, type StepMetric, type Source } from "./director";
 import { SiteSearch } from "./site-search";
 import { Sources } from "./sources";
 import { ElevenLabsStt } from "./stt/elevenlabs";
@@ -24,10 +24,13 @@ export interface Status {
 
 export type Broadcast = (message: Record<string, unknown>) => void;
 
-const sources = new Sources();
-const site = new SiteSearch();
-/** Where material is looked up, as shown on the page. */
-const places = [...(sources.enabled ? config.sources.scopes : []), ...(site.enabled ? [new URL(config.site.searchUrl).hostname] : [])];
+export interface SessionContext { sources: Source[]; places: string[]; root: string }
+function localContext(): SessionContext {
+  const sources = new Sources();
+  const site = new SiteSearch();
+  return { sources: [sources, site], root: join(config.dataDir, "sessions"),
+    places: [...(sources.enabled ? config.sources.scopes : []), ...(site.enabled ? [new URL(config.site.searchUrl).hostname] : [])] };
+}
 
 function stamp(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -64,17 +67,17 @@ export class Session {
   private director: Director;
   private dirReady: Promise<unknown> | null = null;
 
-  constructor(private broadcast: Broadcast, id = stamp(new Date())) {
+  constructor(private broadcast: Broadcast, id = stamp(new Date()) + "-" + crypto.randomUUID(), context = localContext()) {
     this.id = id;
-    this.dir = join(config.dataDir, "sessions", id);
+    this.dir = join(context.root, id);
     const engines: SttEngineName[] = whisperAvailable() ? ["elevenlabs", "whisper"] : ["elevenlabs"];
     this.status = {
       stt: { state: "idle", engine: engines.includes(config.stt.engine) ? config.stt.engine : "elevenlabs", engines },
       slides: { state: "idle", model: config.llm.model },
-      sources: { state: places.length ? "idle" : "off", scopes: places },
+      sources: { state: context.places.length ? "idle" : "off", scopes: context.places },
       variants: false,
     };
-    this.director = new Director([sources, site], {
+    this.director = new Director(context.sources, {
       onSlide: (slide, action, index) => {
         this.broadcast({ type: "slide", slide, action, index });
         void this.saveDeck();
@@ -110,8 +113,8 @@ export class Session {
    * After a restart, the deck of the latest recent session comes back on screen instead of an
    * empty stage; its files keep growing under the same session id.
    */
-  static async resumeLatest(broadcast: Broadcast): Promise<Session> {
-    const root = join(config.dataDir, "sessions");
+  static async resumeLatest(broadcast: Broadcast, context = localContext()): Promise<Session> {
+    const root = context.root;
     const ids = await readdir(root).catch(() => [] as string[]);
     for (const id of ids.sort().reverse()) {
       const deckFile = Bun.file(join(root, id, "deck.json"));
@@ -119,7 +122,7 @@ export class Session {
       if (!(await deckFile.exists()) || !(age < RESUME_WITHIN_MS)) continue;
       try {
         const { slides } = (await deckFile.json()) as { slides: Slide[] };
-        const session = new Session(broadcast, id);
+        const session = new Session(broadcast, id, context);
         const lines = (await Bun.file(join(root, id, "transcript.jsonl")).text().catch(() => "")).trim().split("\n").filter(Boolean);
         session.transcript.push(...lines.map((line) => JSON.parse(line)));
         session.director.load(slides, session.transcript.slice(-20).map((entry) => entry.text).join(" "));
@@ -128,7 +131,7 @@ export class Session {
         break;
       }
     }
-    return new Session(broadcast);
+    return new Session(broadcast, undefined, context);
   }
 
   snapshot() {

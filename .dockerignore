@@ -6,3 +6,8 @@
 !src/**
 !public
 !public/**
+!migrations
+!migrations/**
+!scripts
+!scripts/migrate.ts
+!scripts/create-user.ts

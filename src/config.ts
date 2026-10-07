@@ -21,6 +21,22 @@ export const config = {
   port: Number(env.PORT ?? 4747),
   dataDir: expand(env.DATA_DIR ?? join(root, "data")),
   language: env.SPEECH_LANGUAGE ?? "ru",
+  auth: {
+    origin: env.APP_ORIGIN ?? `http://127.0.0.1:${env.PORT ?? 4747}`,
+    // Verify the actual Corp cookie, never a user header supplied by the browser.
+    corpVerifyUrl: env.CORP_VERIFY_URL,
+    ownerSubject: env.PERSONAL_SOURCE_SUBJECT ?? "corp:owner",
+  },
+  knowledge: {
+    databasePassEntry: env.DATABASE_PASS_ENTRY ?? "live-slides/database-url",
+    embeddingUrl: (env.EMBEDDING_BASE_URL ?? env.LLM_BASE_URL ?? "http://127.0.0.1:4000/v1").replace(/\/$/, ""),
+    embeddingModel: env.EMBEDDING_MODEL ?? "openviking-embedding",
+    dimensions: 1024,
+    tikaUrl: env.TIKA_URL,
+    maxUploadBytes: 20 * 1024 * 1024,
+    maxUserBytes: 200 * 1024 * 1024,
+    maxTextChars: 1_000_000,
+  },
 
   stt: {
     engine: (env.STT_ENGINE ?? "elevenlabs") as SttEngineName,

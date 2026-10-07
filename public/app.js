@@ -12,6 +12,9 @@ const state = {
 };
 
 let ws;
+let activeProject = "";
+let projectList = [];
+let documentsTimer;
 let mic = null; // { stream, context } while this tab owns the microphone
 let quietTimer;
 
@@ -280,8 +283,12 @@ function send(message) {
 }
 
 function connect() {
-  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
-  ws.onmessage = (event) => {
+  if (!activeProject) return;
+  const socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?project=${encodeURIComponent(activeProject)}`);
+  ws = socket;
+  socket.onopen = () => { if (ws === socket) $("mic").disabled = false; };
+  socket.onmessage = (event) => {
+    if (ws !== socket) return;
     const message = JSON.parse(event.data);
     switch (message.type) {
       case "state":
@@ -336,12 +343,15 @@ function connect() {
         break;
     }
   };
-  ws.onclose = () => {
+  socket.onclose = (event) => {
+    if (ws !== socket) return;
     if (mic) releaseMic();
     state.listening = false;
     renderListening();
+    $("mic").disabled = true;
+    if (event.code === 4001) { location.href = "/login"; return; }
     $("chain").replaceChildren(Object.assign(el("li", "is-error"), { textContent: "Нет связи с сервером. Переподключение…" }));
-    setTimeout(connect, 1000);
+    setTimeout(() => { if (ws === socket && activeProject) connect(); }, 1000);
   };
 }
 
@@ -372,6 +382,7 @@ async function startMic() {
   mute.gain.value = 0;
   node.connect(mute).connect(context.destination);
   mic = { stream, context };
+  $("projects-panel").hidden = true;
   localStorage.setItem("engine", $("engine").value);
   send({ type: "start", engine: $("engine").value });
 }
@@ -384,6 +395,7 @@ function releaseMic() {
 }
 
 function toggleMic() {
+  if (!activeProject || ws?.readyState !== WebSocket.OPEN) return;
   if (mic) {
     releaseMic();
     send({ type: "stop" });
@@ -436,4 +448,111 @@ document.addEventListener("keydown", (event) => {
 
 setTheme(localStorage.getItem("theme") ?? "light");
 $("engine").value = localStorage.getItem("engine") ?? "elevenlabs";
-connect();
+void initProjects();
+
+async function api(path, options = {}) {
+  const response = await fetch(path, options);
+  if (response.status === 401) { location.href = "/login"; throw new Error("Войдите в аккаунт"); }
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? "Не удалось выполнить запрос");
+  return result;
+}
+
+async function initProjects() {
+  $("mic").disabled = true;
+  try {
+    const me = await api("/api/me");
+    $("account-name").textContent = me.name;
+    $("logout").hidden = !me.localAccount;
+    $("personal-source-label").hidden = !me.personalSourceAvailable;
+    await loadProjects();
+    const requested = new URL(location.href).searchParams.get("project");
+    const first = projectList.find(p => p.id === requested) ?? projectList[0];
+    if (first) chooseProject(first.id);
+    else $("project-message").textContent = "Создайте проект и загрузите материалы для слайдов.";
+  } catch (error) { $("project-message").textContent = error.message; }
+}
+async function loadProjects() {
+  projectList = await api("/api/projects");
+  $("project-select").replaceChildren(new Option("Выберите проект", ""), ...projectList.map(p => new Option(p.name, p.id)));
+  $("project-select").value = activeProject;
+}
+function chooseProject(id) {
+  if (mic) releaseMic();
+  const previous = ws;
+  ws = null;
+  previous?.close();
+  clearTimeout(documentsTimer);
+  activeProject = id;
+  const url = new URL(location.href);
+  id ? url.searchParams.set("project", id) : url.searchParams.delete("project");
+  history.replaceState(null, "", url);
+  $("project-select").value = id;
+  const selectedName = projectList.find(p => p.id === id)?.name;
+  $("projects-toggle").textContent = selectedName ? `Проект: ${selectedName.slice(0, 24)}${selectedName.length > 24 ? "…" : ""}` : "Проекты";
+  $("projects-toggle").title = selectedName ?? "Проекты";
+  $("project-documents").hidden = !id;
+  $("download").href = `/api/deck.md?project=${encodeURIComponent(id)}`;
+  state.slides = []; state.finals = []; state.partial = ""; state.paths = []; state.view = null; state.listening = false;
+  renderStage(); renderTape(); renderListening();
+  $("mic").disabled = true;
+  $("project-source-note").textContent = projectList.find(p => p.id === id)?.personal_source
+    ? "Источники: документы проекта и моя база знаний." : "Источники: документы этого проекта.";
+  $("project-message").textContent = "";
+  if (id) { void loadDocuments(id); connect(); }
+}
+async function loadDocuments(id) {
+  try {
+    const documents = await api(`/api/projects/${id}/documents`);
+    if (id !== activeProject) return;
+    const names = { queued: "В очереди", processing: "Распознаётся и индексируется", ready: "Готов", error: "Ошибка" };
+    const rows = documents.map(doc => {
+      const li = el("li", "document-row");
+      li.append(el("span", "document-name", doc.name), el("span", `document-status ${doc.status}`, names[doc.status]));
+      if (doc.error) li.append(el("span", "document-error", doc.error));
+      if (doc.status === "error") {
+        const button = el("button", "", "Повторить"); button.type = "button";
+        button.onclick = async () => {
+          button.disabled = true;
+          try { await api(`/api/projects/${id}/documents/${doc.id}/retry`, { method: "POST" }); await loadDocuments(id); }
+          catch (error) { $("project-message").textContent = error.message; button.disabled = false; }
+        };
+        li.append(button);
+      }
+      return li;
+    });
+    $("documents-list").replaceChildren(...(rows.length ? rows : [el("li", "documents-hint", "Документов пока нет. Загрузите первые материалы.")]));
+    clearTimeout(documentsTimer);
+    documentsTimer = setTimeout(() => loadDocuments(id), 3000);
+  } catch (error) { if (id === activeProject) $("project-message").textContent = error.message; }
+}
+$("project-select").onchange = event => chooseProject(event.target.value);
+$("projects-toggle").onclick = () => { $("projects-panel").hidden = !$("projects-panel").hidden; };
+$("project-create").onsubmit = async event => {
+  event.preventDefault();
+  const form = event.target;
+  const button = form.querySelector("button"); button.disabled = true;
+  try {
+    const project = await api("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: form.elements.name.value, personalSource: form.elements.personalSource.checked }) });
+    form.reset(); await loadProjects(); chooseProject(project.id);
+  } catch (error) { $("project-message").textContent = error.message; }
+  finally { button.disabled = false; }
+};
+$("document-files").onchange = async event => {
+  const input = event.target;
+  const files = [...input.files];
+  const id = activeProject;
+  input.disabled = true;
+  try {
+    for (const file of files) {
+      if (file.size > 20 * 1024 * 1024) throw new Error("Файл должен быть не больше 20 МБ");
+      if (id === activeProject) $("project-message").textContent = `Загрузка: ${file.name}`;
+      const form = new FormData(); form.append("file", file);
+      await api(`/api/projects/${id}/documents`, { method: "POST", body: form });
+    }
+    if (id === activeProject) { $("project-message").textContent = "Документы загружены. Обработка идёт в фоне."; await loadDocuments(id); }
+  } catch (error) { if (id === activeProject) $("project-message").textContent = error.message; }
+  finally { input.value = ""; input.disabled = false; }
+};
+$("logout").onclick = async () => { await api("/api/auth/logout", { method: "POST" }); location.href = "/login"; };

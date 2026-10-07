@@ -1,125 +1,195 @@
-import { join, normalize } from "node:path";
-import type { ServerWebSocket } from "bun";
-import { config, secret } from "./config";
-import { deckMarkdown, Session } from "./session";
-import { Waitlist } from "./waitlist";
+import { json } from './http';
+import { join, normalize } from 'node:path';
+import type { ServerWebSocket } from 'bun';
+import { config, secret } from './config';
+import { Auth, canUsePersonal, sameOrigin } from './auth';
+import { Database, type Project, type User } from './database';
+import { InputError } from './documents';
+import { Knowledge } from './knowledge';
+import { ProjectApi } from './project-api';
+import { deckMarkdown, Session, type SessionContext } from './session';
+import { Sources } from './sources';
+import { SiteSearch } from './site-search';
+import { Waitlist } from './waitlist';
 
-const ROOM = "room";
-const PUBLIC = join(config.root, "public");
-/** Public page and its form; everything else on the hosted site is behind the owner's session. */
-const PAGES: Record<string, string> = { "/": "landing.html", "/app": "index.html", "/app/": "index.html" };
-
-let session: Session;
-/** The one browser tab whose microphone is live; everyone else only watches. */
-let micOwner: ServerWebSocket<unknown> | null = null;
+const PUBLIC = join(config.root, 'public');
+const PAGES: Record<string, string> = { '/': 'landing.html', '/app': 'index.html', '/app/': 'index.html', '/login': 'login.html' };
+const db = await Database.open();
+await db.sql`SELECT id FROM projects LIMIT 0`;
+await db.sql`SELECT has_pending_documents FROM app_users LIMIT 0`;
+const auth = new Auth(db);
+const knowledge = new Knowledge(db);
+const api = new ProjectApi(db, knowledge);
 const waitlist = await Waitlist.open();
+if (config.llm.keyPassEntry && !process.env.LLM_API_KEY) config.llm.apiKey = await secret('LLM_API_KEY', config.llm.keyPassEntry);
 
-const server = Bun.serve({
-  hostname: config.host,
-  port: config.port,
+type SocketData = { user: User; project: Project; room: Room; request: Request; checkedAt: number; expiresAt: number; timer?: ReturnType<typeof setInterval> };
+type Room = { key: string; session: Session; context: SessionContext; mic: ServerWebSocket<SocketData> | null; sockets: Set<ServerWebSocket<SocketData>>; busy: boolean };
+const rooms = new Map<string, Promise<Room>>();
 
+async function roomFor(user: User, project: Project): Promise<Room> {
+  const key = `${user.id}:${project.id}`;
+  let pending = rooms.get(key);
+  if (!pending) {
+    pending = (async () => {
+      const personal = project.personal_source && canUsePersonal(user);
+      const context: SessionContext = {
+        root: join(config.dataDir, 'users', user.id, 'projects', project.id, 'sessions'),
+        sources: [knowledge.source(user.id, project.id), ...(personal ? [new Sources(), new SiteSearch()] : [])],
+        places: ['Документы проекта', ...(personal ? config.sources.scopes : [])],
+      };
+      const room = { key, context, mic: null, busy: false, sockets: new Set() } as Room;
+      room.session = await Session.resumeLatest(message => broadcast(room, message), context);
+      return room;
+    })();
+    rooms.set(key, pending);
+    pending.catch(() => rooms.delete(key));
+  }
+  return pending;
+}
+function snapshot(room: Room, user: User) {
+  return { ...room.session.snapshot(), waitlist: canUsePersonal(user) ? waitlist.count : 0 };
+}
+function broadcast(room: Room, message: Record<string, unknown>) {
+  for (const ws of room.sockets) {
+    if (Date.now() > ws.data.expiresAt) ws.close(4001, 'Войдите заново');
+    else ws.send(JSON.stringify(message));
+  }
+}
+const loginLimits = new Map<string, { at: number; count: number }>();
+function loginAllowed(peer: string): boolean {
+  const now = Date.now();
+  for (const [key, value] of loginLimits) if (value.at + 15 * 60_000 < now) loginLimits.delete(key);
+  const value = loginLimits.get(peer) ?? { at: now, count: 0 };
+  loginLimits.set(peer, value);
+  return ++value.count <= 20;
+}
+
+export const server = Bun.serve<SocketData>({
+  hostname: config.host, port: config.port, maxRequestBodySize: config.knowledge.maxUploadBytes + 65536,
   async fetch(request, server) {
-    const url = new URL(request.url);
-    if (url.pathname === "/ws") {
-      return server.upgrade(request) ? undefined : new Response("WebSocket expected", { status: 400 });
+    try {
+      const url = new URL(request.url);
+      if (url.pathname === '/healthz') return new Response('ok');
+      if (url.pathname === '/waitlist' && request.method === 'POST') return joinWaitlist(request, server.requestIP(request)?.address ?? '');
+      if (url.pathname === '/api/auth/login' && request.method === 'POST') {
+        if (!sameOrigin(request)) throw new InputError('Недопустимый источник запроса', 403);
+        const peer = server.requestIP(request)?.address ?? '';
+        // Behind ingress use its overwritten real visitor address, only for rate limiting.
+        if (!loginAllowed(peer + ':' + (request.headers.get('x-real-ip') ?? ''))) throw new InputError('Слишком много попыток. Повторите через 15 минут', 429);
+        const { username, password } = await request.json();
+        if (typeof username !== 'string' || typeof password !== 'string' || username.length > 64 || password.length > 128) throw new InputError('Неверный логин или пароль', 401);
+        return await auth.login(username, password);
+      }
+      if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
+        if (!sameOrigin(request)) throw new InputError('Недопустимый источник запроса', 403);
+        const result = await auth.logout(request);
+        for (const pending of rooms.values()) {
+          const room = await pending;
+          for (const ws of room.sockets) if (ws.data.request.headers.get('cookie') === request.headers.get('cookie')) ws.close(4001, 'Войдите заново');
+        }
+        return result;
+      }
+      const privatePath = url.pathname.startsWith('/api/') || url.pathname === '/ws' || url.pathname === '/app' || url.pathname.startsWith('/app/');
+      if (privatePath) {
+        if (request.method !== 'GET' && !sameOrigin(request)) throw new InputError('Недопустимый источник запроса', 403);
+        const user = await auth.resolve(request);
+        if (!user) return url.pathname.startsWith('/app') ? Response.redirect(new URL('/login', config.auth.origin), 303) : json({ error: 'Войдите в аккаунт' }, { status: 401 });
+        if (url.pathname === '/api/waitlist') {
+          if (!canUsePersonal(user)) throw new InputError('Недоступно', 403);
+          return json(waitlist.list());
+        }
+        const result = await api.handle(request, user);
+        if (result) return result;
+        if (url.pathname === '/ws' || url.pathname === '/api/deck.md' || url.pathname === '/api/health') {
+          const project = await db.project(user.id, url.searchParams.get('project') ?? '');
+          if (!project) throw new InputError('Выберите свой проект', 404);
+          const room = await roomFor(user, project);
+          if (url.pathname === '/ws') {
+            if (!sameOrigin(request)) throw new InputError('Недопустимый источник запроса', 403);
+            return server.upgrade(request, { data: { user, project, room, request, checkedAt: Date.now(), expiresAt: Date.now() + 12 * 60 * 60_000 } }) ? undefined : new Response('WebSocket expected', { status: 400 });
+          }
+          if (url.pathname === '/api/health') return json({ ok: true, session: room.session.id, listening: room.session.listening });
+          return new Response(deckMarkdown(room.session.slides), { headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': `attachment; filename="slides-${room.session.id}.md"` } });
+        }
+        if (url.pathname.startsWith('/api/')) return new Response('Not found', { status: 404 });
+      }
+      const path = normalize(join(PUBLIC, PAGES[url.pathname] ?? url.pathname));
+      if (!path.startsWith(PUBLIC + '/')) return new Response('Not found', { status: 404 });
+      const file = Bun.file(path);
+      return await file.exists() ? new Response(file, { headers: { 'Cache-Control': 'no-store' } }) : new Response('Not found', { status: 404 });
+    } catch (error) {
+      if (error instanceof InputError) return json({ error: error.message }, { status: error.status });
+      if (error instanceof SyntaxError) return json({ error: 'Некорректный запрос' }, { status: 400 });
+      console.error('Запрос не выполнен');
+      return json({ error: 'Сервис временно недоступен' }, { status: 503 });
     }
-    if (url.pathname === "/healthz") return new Response("ok");
-    if (url.pathname === "/waitlist" && request.method === "POST") return joinWaitlist(request, server.requestIP(request)?.address ?? "");
-    if (url.pathname === "/api/waitlist") return Response.json(waitlist.list());
-    if (url.pathname === "/api/health") {
-      return Response.json({ ok: true, session: session.id, listening: session.listening, slides: session.slides.length, waitlist: waitlist.count, status: session.status });
-    }
-    if (url.pathname === "/api/deck.md") {
-      return new Response(deckMarkdown(session.slides), {
-        headers: {
-          "Content-Type": "text/markdown; charset=utf-8",
-          "Content-Disposition": `attachment; filename="slides-${session.id}.md"`,
-        },
-      });
-    }
-    const path = normalize(join(PUBLIC, PAGES[url.pathname] ?? url.pathname));
-    if (!path.startsWith(PUBLIC)) return new Response("Not found", { status: 404 });
-    const file = Bun.file(path);
-    return (await file.exists()) ? new Response(file, { headers: { "Cache-Control": "no-store" } }) : new Response("Not found", { status: 404 });
   },
-
   websocket: {
+    maxPayloadLength: 65536,
     open(ws) {
-      ws.subscribe(ROOM);
-      ws.send(JSON.stringify(snapshot()));
+      ws.data.room.sockets.add(ws);
+      ws.send(JSON.stringify(snapshot(ws.data.room, ws.data.user)));
+      // View-only tabs must also lose access when their login expires or is revoked.
+      ws.data.timer = setInterval(async () => {
+        const current = await auth.resolve(ws.data.request).catch(() => null);
+        if (current?.id !== ws.data.user.id || Date.now() > ws.data.expiresAt) ws.close(4001, 'Войдите заново');
+      }, 60_000);
     },
     async message(ws, message) {
-      if (typeof message !== "string") {
-        if (ws === micOwner) session.audio(message);
-        return;
+      const { room } = ws.data;
+      if (Date.now() > ws.data.expiresAt) { ws.close(4001, 'Войдите заново'); return; }
+      if (Date.now() - ws.data.checkedAt > 60_000) {
+        ws.data.checkedAt = Date.now();
+        const current = await auth.resolve(ws.data.request).catch(() => null);
+        if (current?.id !== ws.data.user.id) { ws.close(4001, 'Войдите заново'); return; }
       }
+      if (typeof message !== 'string') { if (ws === room.mic) room.session.audio(message); return; }
       let command: { type?: string; engine?: string; on?: boolean };
+      try { command = JSON.parse(message); } catch { return; }
+      if (room.busy) return;
+      room.busy = true;
       try {
-        command = JSON.parse(message);
-      } catch {
-        return;
-      }
-      switch (command.type) {
-        case "start":
-          if (session.listening) break;
-          micOwner = ws;
-          await session.start(command.engine === "whisper" || command.engine === "elevenlabs" ? command.engine : undefined);
-          break;
-        case "stop":
-          micOwner = null;
-          await session.stop();
-          break;
-        case "new-slide":
-          session.newSlide();
-          break;
-        case "variants":
-          session.setVariants(command.on === true);
-          break;
-        case "reset":
-          micOwner = null;
-          await session.stop();
-          session = new Session(broadcast);
-          broadcast(snapshot());
-          break;
-      }
+        switch (command.type) {
+          case 'start':
+            if (room.session.listening) break;
+            room.mic = ws;
+            await room.session.start(command.engine === 'whisper' || command.engine === 'elevenlabs' ? command.engine : undefined);
+            break;
+          case 'stop':
+            if (room.mic !== ws) break;
+            room.mic = null; await room.session.stop(); break;
+          case 'new-slide': room.session.newSlide(); break;
+          case 'variants': room.session.setVariants(command.on === true); break;
+          case 'reset':
+            if (room.mic && room.mic !== ws) break;
+            room.mic = null; await room.session.stop();
+            room.session = new Session(message => broadcast(room, message), undefined, room.context);
+            broadcast(room, snapshot(room, ws.data.user)); break;
+        }
+      } finally { room.busy = false; }
     },
     close(ws) {
-      if (ws !== micOwner) return;
-      micOwner = null;
-      void session.stop();
+      clearInterval(ws.data.timer);
+      const room = ws.data.room;
+      room.sockets.delete(ws);
+      if (ws === room.mic) { room.mic = null; void room.session.stop(); }
+      if (!room.sockets.size) {
+        // Drop caches and in-memory speech when the last tab leaves; disk is tenant-scoped.
+        rooms.delete(room.key);
+      }
     },
   },
 });
 
-function snapshot(): Record<string, unknown> {
-  return { ...session.snapshot(), waitlist: waitlist.count };
-}
-
-function broadcast(message: Record<string, unknown>): void {
-  server.publish(ROOM, JSON.stringify(message));
-}
-
-/** The early-access form: JSON from the page script, or a plain form post without it. */
 async function joinWaitlist(request: Request, peer: string): Promise<Response> {
-  const type = request.headers.get("content-type") ?? "";
-  let input: Record<string, unknown> = {};
-  try {
-    input = type.includes("json") ? await request.json() : Object.fromEntries((await request.formData()).entries());
-  } catch {
-    return Response.json({ ok: false, error: "Форма пришла пустой. Попробуйте ещё раз." }, { status: 400 });
-  }
-  // Behind the ingress the peer is nginx; it passes the visitor's address along.
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || peer;
-  const result = await waitlist.add(input, ip);
-  if (result.ok) broadcast({ type: "waitlist", count: waitlist.count });
-  if (!type.includes("json")) return Response.redirect(result.ok ? "/#sent" : `/#error=${encodeURIComponent(result.error)}`, 303);
-  return Response.json(result, { status: result.ok ? 200 : 400 });
+  const type = request.headers.get('content-type') ?? '';
+  let input: Record<string, unknown>;
+  try { input = type.includes('json') ? await request.json() : Object.fromEntries((await request.formData()).entries()); }
+  catch { return json({ ok: false, error: 'Форма пришла пустой. Попробуйте ещё раз.' }, { status: 400 }); }
+  const result = await waitlist.add(input, request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || peer);
+  if (!type.includes('json')) return Response.redirect(new URL(result.ok ? '/#sent' : '/#error=' + encodeURIComponent(result.error), config.auth.origin), 303);
+  return json(result, { status: result.ok ? 200 : 400 });
 }
-
-if (config.llm.keyPassEntry && !process.env.LLM_API_KEY) config.llm.apiKey = await secret("LLM_API_KEY", config.llm.keyPassEntry);
-
-session = await Session.resumeLatest(broadcast);
-if (session.slides.length) console.log(`Продолжаю сессию ${session.id}: слайдов ${session.slides.length}`);
-
+knowledge.start();
 console.log(`Живые слайды: http://${server.hostname}:${server.port}`);
-console.log(`Распознавание: ${config.stt.engine} · слайды: ${config.llm.model} · источники: ${session.status.sources.scopes.join(", ") || "выключены"}`);
