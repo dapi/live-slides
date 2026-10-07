@@ -21,6 +21,9 @@ export function renderLanding(template: string, settings = config.public): strin
     PUBLIC_INTRO_POSTER_URL: address(settings.introPosterUrl, true),
     PUBLIC_VIDEO_HIDDEN: settings.introVideoUrl ? '' : 'hidden',
     PUBLIC_AUTHOR_HIDDEN: settings.authorUrl && settings.authorName ? '' : 'hidden',
+    PUBLIC_AUTHOR_LOGO_URL: address(settings.authorLogoUrl, true),
+    PUBLIC_AUTHOR_LOGO_DARK_URL: address(settings.authorLogoDarkUrl, true),
+    PUBLIC_AUTHOR_LOGO_HIDDEN: settings.authorLogoUrl ? '' : 'hidden',
   };
   return template.replace(/\{\{([A-Z_]+)\}\}/g, (_, name) => {
     if (!(name in values)) throw new Error('Unknown public page placeholder');

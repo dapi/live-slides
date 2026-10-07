@@ -176,6 +176,12 @@ h1 {
 
 .demo .slide-foot .slide-legend { color: var(--mute); }
 
+/* The author's mark signs the demo slide the way a source line does on a real one */
+.slide-brand { display: inline-block; margin-right: 1cqw; vertical-align: -0.9cqw; }
+.slide-brand img { display: inline-block; height: 3.2cqw; width: auto; }
+.slide-brand .brand-dark, :root[data-theme="dark"] .slide-brand .brand-light { display: none; }
+:root[data-theme="dark"] .slide-brand .brand-dark { display: inline-block; }
+
 .tape {
   display: flex;
   justify-content: flex-end;

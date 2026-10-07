@@ -35,6 +35,9 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env) {
       siteUrl: (env.PUBLIC_SITE_URL ?? origin).replace(/\/$/, ""),
       authorName: env.PUBLIC_AUTHOR_NAME ?? "",
       authorUrl: env.PUBLIC_AUTHOR_URL ?? "",
+      // The author's mark on the demo slide, light and dark versions; empty hides it.
+      authorLogoUrl: env.PUBLIC_AUTHOR_LOGO_URL ?? "",
+      authorLogoDarkUrl: env.PUBLIC_AUTHOR_LOGO_DARK_URL ?? env.PUBLIC_AUTHOR_LOGO_URL ?? "",
       introVideoUrl: env.PUBLIC_INTRO_VIDEO_URL ?? "",
       introPosterUrl: env.PUBLIC_INTRO_POSTER_URL ?? "",
     },
