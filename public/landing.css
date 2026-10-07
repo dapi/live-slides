@@ -312,8 +312,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--cobalt); box-sh
 @keyframes blink { 50% { opacity: 0; } }
 
 @media (max-width: 760px) {
-  .hero { grid-template-columns: 1fr; grid-template-areas: "text" "circle" "demo"; padding-top: 16px; row-gap: 24px; }
-  .circle { width: 200px; margin-top: 8px; justify-self: start; }
+  .hero { grid-template-columns: 1fr; grid-template-areas: "text" "circle" "demo"; padding-top: 16px; row-gap: 20px; }
+  /* Small enough that the circle, its caption and the sheet share one phone screen. */
+  .circle { grid-template-columns: 150px minmax(0, 1fr); align-items: center; width: 100%; margin-top: 0; gap: 16px; }
+  .circle figcaption { font-size: 14px; text-align: left; max-width: none; }
+  .circle-sound { width: 36px; height: 36px; }
+  .circle-sound svg { width: 20px; height: 20px; }
   .demo { margin-top: 0; }
   /* The sheet is narrow here: the slide's own units would make its text unreadable. */
   .sheet { aspect-ratio: 4 / 3; }
