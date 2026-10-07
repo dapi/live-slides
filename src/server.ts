@@ -153,7 +153,9 @@ export const server = Bun.serve<SocketData>({
       const path = normalize(join(PUBLIC, PAGES[url.pathname] ?? url.pathname));
       if (!path.startsWith(PUBLIC + '/')) return new Response('Not found', { status: 404 });
       const file = Bun.file(path);
-      return await file.exists() ? new Response(file, { headers: { 'Cache-Control': 'no-store' } }) : new Response('Not found', { status: 404 });
+      // Pages and scripts change with every release; media and icons may sit in a cache for a day.
+      const cache = /\.(mp4|jpg|png|svg)$/.test(path) ? 'public, max-age=86400' : 'no-store';
+      return await file.exists() ? new Response(file, { headers: { 'Cache-Control': cache } }) : new Response('Not found', { status: 404 });
     } catch (error) {
       if (error instanceof InputError) return json({ error: error.message }, { status: error.status });
       if (error instanceof SyntaxError) return json({ error: 'Некорректный запрос' }, { status: 400 });

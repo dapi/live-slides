@@ -63,6 +63,9 @@ a { color: inherit; }
 .cta:hover { background: color-mix(in srgb, var(--cobalt) 86%, black); }
 .cta:disabled { opacity: 0.6; cursor: default; }
 .cta-small { padding: 8px 14px; font-size: 15px; }
+/* The header's copy of the button stays quiet: one loud thing in the first screen. */
+.cta-ghost { background: transparent; color: var(--cobalt); }
+.cta-ghost:hover { background: color-mix(in srgb, var(--cobalt) 10%, transparent); }
 
 .more { color: var(--mute); text-underline-offset: 3px; }
 .more:hover { color: var(--ink); }
@@ -116,12 +119,16 @@ h1 {
   width: 100%;
   aspect-ratio: 1;
   padding: 0;
-  border: 0;
+  border: 4px solid var(--paper);
   border-radius: 50%;
   background: var(--line);
+  /* A cobalt ring, as Telegram marks a fresh circle, and a soft shadow that lifts it off the page */
+  box-shadow: 0 0 0 3px var(--cobalt), 0 18px 36px -14px rgba(14, 26, 58, 0.45);
   overflow: hidden;
   cursor: pointer;
 }
+
+.circle-button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--cobalt), 0 0 0 7px color-mix(in srgb, var(--cobalt) 30%, transparent); }
 
 .circle-button video { display: block; width: 100%; height: 100%; object-fit: cover; }
 
@@ -154,14 +161,16 @@ h1 {
 .sheet {
   position: relative;
   aspect-ratio: 16 / 9;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--paper) 70%, white);
+  border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  border-radius: 8px;
+  background: #fff;
+  /* A sheet lying on the paper: a hairline edge and a shadow that falls down and away */
+  box-shadow: 0 1px 2px rgba(14, 26, 58, 0.06), 0 24px 48px -24px rgba(14, 26, 58, 0.35);
   container-type: inline-size;
   overflow: hidden;
 }
 
-:root[data-theme="dark"] .sheet { background: color-mix(in srgb, var(--paper) 80%, black); }
+:root[data-theme="dark"] .sheet { background: color-mix(in srgb, var(--paper) 70%, black); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 24px 48px -24px rgba(0, 0, 0, 0.7); }
 
 .slide[hidden] { display: none; }
 
@@ -260,7 +269,7 @@ input, textarea {
   padding: 11px 13px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--paper) 60%, white);
+  background: #fff;
   color: var(--ink);
   font: inherit;
   line-height: 1.4;
