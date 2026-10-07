@@ -13,3 +13,4 @@
 !scripts
 !scripts/migrate.ts
 !scripts/create-user.ts
+!scripts/invite-user.ts

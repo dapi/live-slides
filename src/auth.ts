@@ -1,15 +1,23 @@
 import { json } from './http';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import type { SQL } from 'bun';
 import type { Database, User } from './database';
 import { config } from './config';
 import { InputError } from './documents';
+import type { Mail } from './mail';
 
 export const COOKIE = 'live_slides_session';
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const AGE = 12 * 60 * 60;
+const CODE_TTL_MINUTES = 10;
+const CODE_ATTEMPTS = 5;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export class Auth {
-  constructor(private db: Database) {}
+  constructor(private db: Database, private mail?: Mail) {}
+
+  get emailAvailable(): boolean {
+    return Boolean(this.mail?.enabled);
+  }
 
   async resolve(request: Request): Promise<User | null> {
     const token = this.token(request);
@@ -50,8 +58,58 @@ export class Auth {
     return json({ ok: true }, { headers: { 'Set-Cookie': this.cookie(token, AGE) } });
   }
 
+  /**
+   * Sends a one-time code to an account's e-mail. An unknown address gets the same answer as a
+   * known one, so the form reveals no accounts; the code lives ten minutes and five attempts.
+   */
+  async requestCode(input: unknown): Promise<Response> {
+    if (!this.emailAvailable) throw new InputError('Вход по почте недоступен', 404);
+    const email = this.email(input);
+    const [user] = await this.db.sql`SELECT id, display_name FROM app_users WHERE lower(email) = ${email}`;
+    if (user) {
+      const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+      await this.db.sql.begin(async tx => {
+        // One letter a minute per account: a stranger typing someone's address cannot flood it.
+        const [recent] = await tx`SELECT 1 FROM login_codes WHERE user_id = ${user.id} AND created_at > now() - interval '1 minute'`;
+        if (recent) throw new InputError('Письмо с кодом уже отправлено. Проверьте почту или подождите минуту', 429);
+        await tx`DELETE FROM login_codes WHERE user_id = ${user.id} OR expires_at < now()`;
+        await tx`INSERT INTO login_codes(user_id, code_hash, expires_at) VALUES (${user.id}, ${hash(code)}, now() + ${CODE_TTL_MINUTES} * interval '1 minute')`;
+      });
+      await this.mail!.send(email, `${code} — код для входа в Живые слайды`,
+        `${user.display_name}, ваш код для входа в «Живые слайды»: ${code}\n\nОн действует ${CODE_TTL_MINUTES} минут. Если вы не запрашивали вход, просто не отвечайте на это письмо.\n\n${config.auth.origin}/login`);
+    }
+    return json({ ok: true });
+  }
+
+  async loginByCode(input: unknown): Promise<Response> {
+    if (!this.emailAvailable) throw new InputError('Вход по почте недоступен', 404);
+    const email = this.email(input);
+    const code = String((input as { code?: unknown } | null)?.code ?? '').replace(/\D/g, '');
+    if (code.length !== 6) throw new InputError('Код — шесть цифр из письма');
+    const token = await this.db.sql.begin(async tx => {
+      const [row] = await tx`SELECT c.id, c.user_id, c.code_hash, c.attempts FROM login_codes c JOIN app_users u ON u.id = c.user_id
+        WHERE lower(u.email) = ${email} AND c.expires_at > now() ORDER BY c.created_at DESC LIMIT 1 FOR UPDATE OF c`;
+      if (!row || row.attempts >= CODE_ATTEMPTS) throw new InputError('Код не подошёл или устарел. Запросите новый', 401);
+      const expected = Buffer.from(row.code_hash, 'hex');
+      const actual = Buffer.from(hash(code), 'hex');
+      if (!timingSafeEqual(expected, actual)) {
+        await tx`UPDATE login_codes SET attempts = attempts + 1 WHERE id = ${row.id}`;
+        throw new InputError('Код не подошёл. Проверьте цифры из письма', 401);
+      }
+      await tx`DELETE FROM login_codes WHERE user_id = ${row.user_id}`;
+      return this.issue(tx as SQL, row.user_id);
+    });
+    return json({ ok: true }, { headers: { 'Set-Cookie': this.cookie(token, AGE) } });
+  }
+
+  private email(input: unknown): string {
+    const email = String((input as { email?: unknown } | null)?.email ?? '').trim().toLowerCase();
+    if (email.length > 120 || !EMAIL.test(email)) throw new InputError('Проверьте адрес почты');
+    return email;
+  }
+
   async profile(user: User) {
-    const [profile] = await this.db.sql`SELECT display_name AS name, username,
+    const [profile] = await this.db.sql`SELECT display_name AS name, username, email,
       password_hash IS NOT NULL AS "hasPassword" FROM app_users WHERE id = ${user.id}`;
     return profile;
   }

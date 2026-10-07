@@ -713,6 +713,8 @@ async function loadProfile() {
     const profile = await api("/api/profile");
     if (currentView !== "profile") return;
     $("profile-form").elements.name.value = profile.name;
+    $("profile-email").hidden = !profile.email;
+    $("profile-email").textContent = profile.email ? `Вход по коду на почту: ${profile.email}` : "";
     $("password-form").elements.username.value = profile.username ?? "";
     $("current-password-label").hidden = !profile.hasPassword;
     $("password-form").elements.currentPassword.required = profile.hasPassword;

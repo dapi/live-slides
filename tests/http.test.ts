@@ -153,7 +153,7 @@ suite('HTTP and WebSocket tenant boundary', () => {
     expect((await request('/api/profile')).status).toBe(401);
     const profile = await (await request('/api/profile', cookieA)).json();
     expect(profile.username).toBe('alice-' + suffix); expect(profile.hasPassword).toBe(true);
-    expect(Object.keys(profile).sort()).toEqual(['hasPassword', 'name', 'username']);
+    expect(Object.keys(profile).sort()).toEqual(['email', 'hasPassword', 'name', 'username']);
     expect((await fetch(origin + '/api/profile', { method: 'PATCH', headers: { Cookie: cookieA, Origin: 'https://attacker.test' }, body: '{}' })).status).toBe(403);
     expect((await request('/api/profile', cookieA, 'PATCH', { name: 'New Alice', id: createdUsers[1] })).status).toBe(200);
     expect((await (await request('/api/profile', cookieB)).json()).name).toBe('bob');

@@ -64,6 +64,7 @@ direnv exec . bin/start
 | Слайды | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_KEY_PASS_ENTRY` → `LLM_API_KEY` |
 | Векторы | `EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_KEY_PASS_ENTRY` → `EMBEDDING_API_KEY` |
 | Речь | `STT_ENGINE`, `SPEECH_LANGUAGE`, `ELEVENLABS_PASS_ENTRY`, `WHISPER_MODEL` |
+| Вход по коду на почту | `SMTP_URL`, `SMTP_PASSWORD_PASS_ENTRY` → `SMTP_PASSWORD`, `MAIL_FROM` |
 | Личная память | `PERSONAL_SOURCE_SUBJECT`, `OPENVIKING_*`, `SOURCE_SCOPES` |
 | Дополнительный вход | `CORP_VERIFY_URL`, `CORP_LOGIN_URL`, `CORP_OWNER_USER` |
 | Публичная страница | `PUBLIC_SITE_URL`, `PUBLIC_AUTHOR_*`, `PUBLIC_INTRO_*` |
@@ -77,6 +78,13 @@ direnv exec . bin/start
 инструкцию режиссёра и термины и добавить описание выступления (поля
 `director_prompt`, `talk_brief`, `speech_terms`, миграция 004); пустое поле —
 стандартный текст.
+
+Аккаунт с почтой входит по одноразовому коду из письма (`POST /api/auth/code`,
+затем `/api/auth/code/verify`; код — шесть цифр, десять минут, пять попыток,
+одно письмо в минуту; миграция 005). Такой аккаунт создаёт
+`bun scripts/invite-user.ts <login> <имя> <почта>`; пароль он может задать в
+профиле. Без `SMTP_URL`, `MAIL_FROM` и пароля форма показывает только вход по
+логину и паролю.
 
 Заявки с публичной страницы хранятся в таблице `waitlist_requests` (миграция
 003) и уходят в Sales CRM как intake lead по контракту `sales-intake/v1`;

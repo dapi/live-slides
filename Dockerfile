@@ -21,6 +21,7 @@ COPY src ./src
 COPY public ./public
 COPY scripts/migrate.ts ./scripts/migrate.ts
 COPY scripts/create-user.ts ./scripts/create-user.ts
+COPY scripts/invite-user.ts ./scripts/invite-user.ts
 COPY migrations ./migrations
 COPY prompts ./prompts
 

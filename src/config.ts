@@ -52,6 +52,14 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env) {
       sourceSystem: env.CRM_SOURCE_SYSTEM ?? "live-slides",
       productTier: env.CRM_PRODUCT_TIER ?? "LIVE-SLIDES-EARLY-ACCESS",
     },
+    // Sign-in codes go out by SMTP; without a server address or a sender the e-mail sign-in is off.
+    mail: {
+      // smtps://user@host:465 or smtp://user@host:587 (STARTTLS); the password comes separately.
+      smtpUrl: env.SMTP_URL ?? "",
+      passwordEnv: "SMTP_PASSWORD",
+      passwordPassEntry: env.SMTP_PASSWORD_PASS_ENTRY,
+      from: env.MAIL_FROM ?? "",
+    },
     knowledge: {
       databasePassEntry: env.DATABASE_PASS_ENTRY,
       embeddingUrl: (env.EMBEDDING_BASE_URL ?? env.LLM_BASE_URL ?? "http://127.0.0.1:4000/v1").replace(/\/$/, ""),

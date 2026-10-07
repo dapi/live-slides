@@ -12,6 +12,7 @@ import { deckMarkdown, Session, type SessionContext } from './session';
 import { Sources } from './sources';
 import { SiteSearch } from './site-search';
 import { Waitlist } from './waitlist';
+import { Mail } from './mail';
 import { renderLanding } from './pages';
 
 const PUBLIC = join(config.root, 'public');
@@ -20,7 +21,10 @@ const db = await Database.open();
 await db.sql`SELECT id FROM projects LIMIT 0`;
 await db.sql`SELECT has_pending_documents, username FROM app_users LIMIT 0`;
 await db.sql`SELECT director_prompt, talk_brief, speech_terms FROM projects LIMIT 0`;
-const auth = new Auth(db);
+await db.sql`SELECT email FROM app_users LIMIT 0`;
+await db.sql`SELECT id FROM login_codes LIMIT 0`;
+const mail = new Mail();
+const auth = new Auth(db, mail);
 const knowledge = new Knowledge(db);
 const api = new ProjectApi(db, knowledge, changeProject);
 const waitlist = await Waitlist.open(db);
@@ -95,7 +99,7 @@ export const server = Bun.serve<SocketData>({
     try {
       const url = new URL(request.url);
       if (url.pathname === '/auth/corp' && request.method === 'GET') return await auth.corpLogin(request);
-      if (url.pathname === '/api/auth/options' && request.method === 'GET') return json({ corpAvailable: corpAvailable() });
+      if (url.pathname === '/api/auth/options' && request.method === 'GET') return json({ corpAvailable: corpAvailable(), emailAvailable: auth.emailAvailable });
       if (url.pathname === '/healthz') return new Response('ok', { headers: { 'X-App-Version': release.version } });
       if (url.pathname === '/version' && request.method === 'GET') return json(release);
       if (url.pathname === '/waitlist' && request.method === 'POST') return joinWaitlist(request, server.requestIP(request)?.address ?? '');
@@ -107,6 +111,13 @@ export const server = Bun.serve<SocketData>({
         const { username, password } = await request.json();
         if (typeof username !== 'string' || typeof password !== 'string' || username.length > 64 || password.length > 128) throw new InputError('Неверный логин или пароль', 401);
         return await auth.login(username, password);
+      }
+      if ((url.pathname === '/api/auth/code' || url.pathname === '/api/auth/code/verify') && request.method === 'POST') {
+        if (!sameOrigin(request)) throw new InputError('Недопустимый источник запроса', 403);
+        const peer = server.requestIP(request)?.address ?? '';
+        if (!loginAllowed(peer + ':' + (request.headers.get('x-real-ip') ?? ''))) throw new InputError('Слишком много попыток. Повторите через 15 минут', 429);
+        const input = await request.json();
+        return url.pathname === '/api/auth/code' ? await auth.requestCode(input) : await auth.loginByCode(input);
       }
       if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
         if (!sameOrigin(request)) throw new InputError('Недопустимый источник запроса', 403);

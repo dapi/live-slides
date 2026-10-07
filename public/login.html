@@ -2,6 +2,8 @@
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Вход — Живые слайды</title><link rel="stylesheet" href="/slide.css"><link rel="stylesheet" href="/styles.css"></head>
 <body class="login-page"><main class="login-card">
 <a href="/">Живые слайды</a><h1>Вход</h1><p>Ваши презентации и документы доступны только вам.</p>
+<form id="code-form" hidden><label>Почта <input name="email" type="email" autocomplete="email" required maxlength="120"></label><label id="code-label" hidden>Код из письма <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7"></label><button type="submit" id="code-submit">Получить код</button><p id="code-message" role="status"></p><button type="button" class="link-button" id="code-restart" hidden>Запросить код ещё раз</button></form>
 <form id="login-form"><label>Логин <input name="username" autocomplete="username" required maxlength="64"></label><label>Пароль <input name="password" type="password" autocomplete="current-password" required maxlength="128"></label><button type="submit">Войти</button><p id="login-message" role="status"></p></form>
+<p class="login-switch"><button type="button" class="link-button" id="switch-password" hidden>Войти по логину и паролю</button><button type="button" class="link-button" id="switch-code" hidden>Войти по коду из письма</button></p>
 <p>Для раннего доступа аккаунт создаёт администратор.</p><a id="corp-login" href="/auth/corp" hidden>Войти через Corp</a>
 </main><script type="module" src="/login.js"></script></body></html>

@@ -362,6 +362,9 @@ dialog::backdrop { background: #101a3a66; }
 .login-card label { display: flex; flex-direction: column; gap: 10px; }
 .login-card button { padding: 10px; font: inherit; cursor: pointer; }
 .login-card a { color: var(--cobalt); }
+.login-card .link-button { padding: 0; border: 0; background: none; color: var(--cobalt); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.login-card .login-switch { margin: 0 0 20px; }
+.login-card input:read-only { color: var(--mute); }
 @media (max-width: 800px) {
   .settings-grid { grid-template-columns: 1fr; }
   .presentation-status { display: none; }
