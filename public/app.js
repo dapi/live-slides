@@ -489,7 +489,7 @@ function renderProjects() {
   const cards = projectList.map(project => {
     const card = el("article", "project-card");
     card.append(el("h2", "", project.name), el("p", "muted", `Документов: ${project.document_count ?? 0} · готово: ${project.ready_count ?? 0}`),
-      el("p", "muted", project.personal_source ? "Документы и моя база знаний" : "Документы проекта"));
+      el("p", "muted", project.personal_source ? "Документы и моя база знаний" : "Документы презентации"));
     const actions = el("div", "card-actions");
     const present = el("button", "primary", "Начать выступление");
     const settings = el("button", "", "Настроить");
@@ -501,8 +501,8 @@ function renderProjects() {
   });
   if (!cards.length) {
     const empty = el("div", "empty-projects");
-    empty.append(el("h2", "", "Ваш первый проект"), el("p", "muted", "Соберите материалы для доклада в одном месте."));
-    const button = el("button", "primary", "Создать проект"); button.type = "button"; button.onclick = openCreate;
+    empty.append(el("h2", "", "Ваша первая презентация"), el("p", "muted", "Соберите материалы для доклада в одном месте."));
+    const button = el("button", "primary", "Создать презентацию"); button.type = "button"; button.onclick = openCreate;
     empty.append(button); cards.push(empty);
   }
   $("project-list").replaceChildren(...cards);
@@ -551,7 +551,7 @@ async function navigate(view, id = "", push = true) {
   if (view === "settings") {
     $("project-settings").elements.name.value = project.name;
     $("project-settings").elements.personalSource.checked = project.personal_source;
-    $("project-source-note").textContent = "Загруженные документы используются только в этом проекте.";
+    $("project-source-note").textContent = "Загруженные документы используются только в этой презентации.";
     $("settings-title").focus();
     $("documents-list").replaceChildren(el("li", "muted", "Загружаю документы…"));
     void loadDocuments(id);

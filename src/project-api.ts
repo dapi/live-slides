@@ -18,13 +18,13 @@ export class ProjectApi {
       if (request.method === 'POST') {
         const input = await request.json();
         const name = typeof input.name === 'string' ? input.name.trim() : '';
-        if (!name || name.length > 120) throw new InputError('Название проекта: от 1 до 120 символов');
+        if (!name || name.length > 120) throw new InputError('Название презентации: от 1 до 120 символов');
         const personal = input.personalSource === true;
         if (personal && (!canUsePersonal(user) || !config.sources.enabled)) throw new InputError('Источник недоступен', 403);
         const project = await this.db.as(user.id, async tx => {
           await tx`SELECT pg_advisory_xact_lock(hashtextextended(${user.id}, 0))`;
           const [count] = await tx`SELECT count(*)::int AS count FROM projects WHERE owner_id = ${user.id}`;
-          if (count.count >= 50) throw new InputError('Лимит аккаунта: 50 проектов', 413);
+          if (count.count >= 50) throw new InputError('Лимит аккаунта: 50 презентаций', 413);
           return (await tx`INSERT INTO projects(owner_id, name, personal_source) VALUES (${user.id}, ${name}, ${personal}) RETURNING id, name, personal_source`)[0];
         });
         return json(project, { status: 201 });
@@ -34,11 +34,11 @@ export class ProjectApi {
     if (settings) {
       if (request.method !== 'PATCH') return new Response('Method not allowed', { status: 405 });
       const project = await this.db.project(user.id, settings[1]!);
-      if (!project) throw new InputError('Проект не найден', 404);
+      if (!project) throw new InputError('Презентация не найдена', 404);
       const input = await request.json();
       const name = typeof input.name === 'string' ? input.name.trim() : '';
-      if (!name || name.length > 120) throw new InputError('Название проекта: от 1 до 120 символов');
-      if (typeof input.personalSource !== 'boolean') throw new InputError('Выберите источники проекта');
+      if (!name || name.length > 120) throw new InputError('Название презентации: от 1 до 120 символов');
+      if (typeof input.personalSource !== 'boolean') throw new InputError('Выберите источники презентации');
       const personal = input.personalSource;
       if (personal && (!canUsePersonal(user) || !config.sources.enabled)) throw new InputError('Источник недоступен', 403);
       return json(await this.changeProject(user, project, () => this.db.as(user.id, async tx =>
@@ -48,7 +48,7 @@ export class ProjectApi {
     const route = url.pathname.match(/^\/api\/projects\/([a-f0-9-]{36})\/documents(?:\/([a-f0-9-]{36})\/retry)?$/i);
     if (!route) return null;
     const project = await this.db.project(user.id, route[1]!);
-    if (!project) throw new InputError('Проект не найден', 404);
+    if (!project) throw new InputError('Презентация не найдена', 404);
     if (route[2] && request.method === 'POST') {
       const doc = await this.db.as(user.id, async tx => {
         await tx`SELECT pg_advisory_xact_lock(hashtextextended(${user.id}, 0))`;

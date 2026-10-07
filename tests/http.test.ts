@@ -100,7 +100,7 @@ suite('HTTP and WebSocket tenant boundary', () => {
     expect((await request('/api/projects/' + project.id, 'synthetic-corp=verified', 'PATCH', { name: 'Owner project', personalSource: false })).status).toBe(200);
     expect(await closed).toBe(4002);
     const updated = await socket(project.id, 'synthetic-corp=verified');
-    expect(updated.state.status.sources.scopes).toEqual(['Документы проекта']);
+    expect(updated.state.status.sources.scopes).toEqual(['Документы презентации']);
     expect(updated.state.session).toBe(ownerSocket.state.session);
     updated.ws.close();
     const [owner] = await db.sql`SELECT id FROM app_users WHERE subject = 'corp:owner'`;
@@ -109,7 +109,7 @@ suite('HTTP and WebSocket tenant boundary', () => {
   test('WebSocket rooms never broadcast to other accounts', async () => {
     const sa = await socket(a, cookieA), sb = await socket(b, cookieB);
     expect(sa.state.session).not.toBe(sb.state.session);
-    expect(sa.state.status.sources.scopes).toEqual(['Документы проекта']);
+    expect(sa.state.status.sources.scopes).toEqual(['Документы презентации']);
     expect(sb.state.slides).toHaveLength(0); expect(sb.state.transcript).toHaveLength(0);
     const receivedB: unknown[] = []; sb.ws.onmessage = event => receivedB.push(event.data);
     const changed = new Promise<any>(resolve => { sa.ws.onmessage = event => resolve(JSON.parse(String(event.data))); });

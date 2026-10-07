@@ -39,7 +39,7 @@ async function changeProject(user: User, project: Project, update: () => Promise
     if (room) {
       await room.session.stop();
       rooms.delete(key);
-      for (const socket of room.sockets) socket.close(4002, 'Настройки проекта изменены');
+      for (const socket of room.sockets) socket.close(4002, 'Настройки презентации изменены');
     }
     return saved;
   } finally { if (room) room.busy = false; }
@@ -55,7 +55,7 @@ async function roomFor(user: User, project: Project): Promise<Room> {
         root: join(config.dataDir, 'users', user.id, 'projects', project.id, 'sessions'),
         resumeWithinMs: Infinity,
         sources: [knowledge.source(user.id, project.id), ...(personal ? [new Sources(), new SiteSearch()] : [])],
-        places: ['Документы проекта', ...(personal ? config.sources.scopes : [])],
+        places: ['Документы презентации', ...(personal ? config.sources.scopes : [])],
       };
       const room = { key, context, mic: null, busy: false, sockets: new Set() } as Room;
       room.session = await Session.resumeLatest(message => broadcast(room, message), context);
@@ -123,7 +123,7 @@ export const server = Bun.serve<SocketData>({
         if (result) return result;
         if (url.pathname === '/ws' || url.pathname === '/api/deck.md' || url.pathname === '/api/health') {
           const project = await db.project(user.id, url.searchParams.get('project') ?? '');
-          if (!project) throw new InputError('Выберите свой проект', 404);
+          if (!project) throw new InputError('Выберите свою презентацию', 404);
           const room = await roomFor(user, project);
           if (url.pathname === '/ws') {
             if (!sameOrigin(request)) throw new InputError('Недопустимый источник запроса', 403);

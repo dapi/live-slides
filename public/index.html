@@ -17,14 +17,14 @@
   </header>
 
   <main class="workspace" id="projects-view" aria-labelledby="projects-title">
-    <div class="page-heading"><div><p class="eyebrow">Ваше пространство</p><h1 id="projects-title" tabindex="-1">Мои проекты</h1><p class="muted">Материалы и выступления — каждый в своём проекте.</p></div><button class="primary" id="create-open" type="button">+ Новый проект</button></div>
+    <div class="page-heading"><div><p class="eyebrow">Ваше пространство</p><h1 id="projects-title" tabindex="-1">Мои презентации</h1><p class="muted">Материалы, слайды и выступления — в одном месте.</p></div><button class="primary" id="create-open" type="button">+ Новая презентация</button></div>
     <p id="projects-message" role="status"></p>
     <div class="project-grid" id="project-list"></div>
   </main>
 
   <main class="workspace" id="settings-view" aria-labelledby="settings-title" hidden>
-    <button class="back-link" id="settings-back" type="button">← Мои проекты</button>
-    <div class="page-heading"><div><p class="eyebrow">Настройки проекта</p><h1 id="settings-title" tabindex="-1"></h1><p class="muted">Подготовьте материалы, затем переходите к выступлению.</p></div><button class="primary" id="settings-present" type="button">Начать выступление →</button></div>
+    <button class="back-link" id="settings-back" type="button">← Мои презентации</button>
+    <div class="page-heading"><div><p class="eyebrow">Настройки презентации</p><h1 id="settings-title" tabindex="-1"></h1><p class="muted">Подготовьте материалы, затем переходите к выступлению.</p></div><button class="primary" id="settings-present" type="button">Начать выступление →</button></div>
     <div class="settings-grid">
       <section class="surface documents-section" aria-labelledby="documents-title">
         <div class="section-heading"><h2 id="documents-title">Документы</h2><span class="muted" id="documents-count"></span></div>
@@ -35,12 +35,12 @@
           <p class="documents-hint">TXT, PDF, DOC, DOCX · до 20 МБ на файл</p>
         </div>
         <ul id="documents-list"></ul>
-        <details class="help-details"><summary>Как используются материалы</summary><p class="muted">Слайды используют готовые документы этого проекта. Обработка идёт в фоне. PDF — до 60 страниц, включая сканы; TXT — в UTF-8.</p></details>
+        <details class="help-details"><summary>Как используются материалы</summary><p class="muted">Слайды используют готовые документы этой презентации. Обработка идёт в фоне. PDF — до 60 страниц, включая сканы; TXT — в UTF-8.</p></details>
       </section>
       <section class="surface" aria-labelledby="project-options-title">
-        <h2 id="project-options-title">Проект и источники</h2>
+        <h2 id="project-options-title">Презентация и источники</h2>
         <form id="project-settings" class="stack-form">
-          <label>Название проекта<input name="name" maxlength="120" required></label>
+          <label>Название презентации<input name="name" maxlength="120" required></label>
           <p class="muted" id="project-source-note"></p>
           <label class="checkbox-label" id="personal-source-label" hidden><input type="checkbox" name="personalSource"><span>Использовать мою базу знаний<small>Личный источник доступен только вашему аккаунту.</small></span></label>
           <button type="submit">Сохранить настройки</button>
@@ -51,14 +51,14 @@
   </main>
 
   <header class="bar" id="bar" hidden>
-    <button type="button" id="presentation-back" class="back-link">← Проекты</button>
+    <button type="button" id="presentation-back" class="back-link">← Презентации</button>
     <span class="presentation-name" id="presentation-name"></span>
     <span class="presentation-status" id="presentation-status" role="status"></span>
     <div class="bar-actions">
       <button class="mic" id="mic" type="button" aria-pressed="false" disabled><span class="mic-level" id="mic-level" aria-hidden="true"></span><span id="mic-label">Начать запись</span></button>
       <button type="button" id="new-slide" title="Клавиша N">Новый слайд</button>
       <details class="presentation-menu" id="presentation-menu"><summary aria-label="Действия с презентацией">•••</summary><div class="menu-content">
-        <button type="button" id="presentation-settings">Настройки проекта</button>
+        <button type="button" id="presentation-settings">Настройки презентации</button>
         <button type="button" id="variants" aria-pressed="false">Варианты продолжения</button>
         <button type="button" id="fullscreen">На весь экран</button>
         <button type="button" id="tape-toggle" aria-pressed="false">Показать расшифровку</button>
@@ -75,7 +75,7 @@
   <p class="away" id="away" hidden><span id="away-text"></span><button type="button" id="back-live">Вернуться к живому слайду</button></p>
   <footer class="tape" id="tape" aria-label="Распознанная речь" hidden><p class="tape-line"><span id="tape-final"></span><span id="tape-partial"></span></p></footer>
 
-  <dialog id="create-dialog"><form id="project-create" class="stack-form"><div class="section-heading"><h2>Новый проект</h2><button type="button" id="create-close" aria-label="Закрыть">✕</button></div><label>Название<input name="name" maxlength="120" required placeholder="Например, доклад о продукте"></label><p class="muted">После создания добавьте документы и выберите источники в настройках.</p><p id="create-message" role="status"></p><button class="primary" type="submit">Создать проект</button></form></dialog>
+  <dialog id="create-dialog"><form id="project-create" class="stack-form"><div class="section-heading"><h2>Новая презентация</h2><button type="button" id="create-close" aria-label="Закрыть">✕</button></div><label>Название<input name="name" maxlength="120" required placeholder="Например, доклад о продукте"></label><p class="muted">После создания добавьте документы и выберите источники в настройках.</p><p id="create-message" role="status"></p><button class="primary" type="submit">Создать презентацию</button></form></dialog>
   <dialog id="shortcuts-dialog"><div class="section-heading"><h2>Горячие клавиши</h2><button type="button" id="shortcuts-close" aria-label="Закрыть">✕</button></div><dl class="shortcut-list"><dt>Пробел</dt><dd>Начать или остановить запись</dd><dt>N</dt><dd>Новый слайд</dd><dt>← →</dt><dd>Листать слайды</dd><dt>L</dt><dd>Вернуться к живому слайду</dd><dt>V</dt><dd>Варианты продолжения</dd><dt>F</dt><dd>На весь экран</dd><dt>D</dt><dd>Сменить тему</dd><dt>T</dt><dd>Показать расшифровку</dd></dl></dialog>
   <script type="module" src="/app.js"></script>
 </body>
