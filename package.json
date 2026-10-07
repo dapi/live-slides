@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "simulate": "bun scripts/simulate.ts",
     "bench": "bun scripts/bench-models.ts",
+    "regress": "bun scripts/regress.ts",
     "version:bump": "bun scripts/bump-version.ts",
     "release:check": "bun scripts/release.ts check",
     "release:tag": "bun scripts/release.ts tag",
