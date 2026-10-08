@@ -11,6 +11,7 @@ import { ProjectApi } from './project-api';
 import { deckMarkdown, Session, type SessionContext } from './session';
 import { Sources } from './sources';
 import { SiteSearch } from './site-search';
+import { Visits } from './visits';
 import { Waitlist } from './waitlist';
 import { Mail } from './mail';
 import { renderLanding } from './pages';
@@ -23,11 +24,13 @@ await db.sql`SELECT has_pending_documents, username FROM app_users LIMIT 0`;
 await db.sql`SELECT director_prompt, talk_brief, speech_terms FROM projects LIMIT 0`;
 await db.sql`SELECT email FROM app_users LIMIT 0`;
 await db.sql`SELECT id FROM login_codes LIMIT 0`;
+await db.sql`SELECT day FROM page_visits LIMIT 0`;
 const mail = new Mail();
 const auth = new Auth(db, mail);
 const knowledge = new Knowledge(db);
 const api = new ProjectApi(db, knowledge, changeProject);
 const waitlist = await Waitlist.open(db);
+const visits = new Visits(db);
 if (config.llm.keyPassEntry && !process.env.LLM_API_KEY) config.llm.apiKey = await secret('LLM_API_KEY', config.llm.keyPassEntry);
 
 type SocketData = { user: User; project: Project; room: Room; request: Request; checkedAt: number; expiresAt: number; timer?: ReturnType<typeof setInterval> };
@@ -76,7 +79,8 @@ async function roomFor(user: User, project: Project): Promise<Room> {
   return pending;
 }
 async function snapshot(room: Room, user: User) {
-  return { ...room.session.snapshot(), waitlist: canUsePersonal(user) ? await waitlist.count() : 0 };
+  const owner = canUsePersonal(user);
+  return { ...room.session.snapshot(), waitlist: owner ? await waitlist.count() : 0, visits: owner ? await visits.week() : 0 };
 }
 function broadcast(room: Room, message: Record<string, unknown>) {
   for (const ws of room.sockets) {
@@ -147,9 +151,9 @@ export const server = Bun.serve<SocketData>({
           }
           return response;
         }
-        if (url.pathname === '/api/waitlist') {
+        if (url.pathname === '/api/waitlist' || url.pathname === '/api/visits') {
           if (!canUsePersonal(user)) throw new InputError('Недоступно', 403);
-          return json(await waitlist.list());
+          return json(url.pathname === '/api/visits' ? await visits.stats() : await waitlist.list());
         }
         const result = await api.handle(request, user);
         if (result) return result;
@@ -169,9 +173,12 @@ export const server = Bun.serve<SocketData>({
       const path = normalize(join(PUBLIC, PAGES[url.pathname] ?? url.pathname));
       if (!path.startsWith(PUBLIC + '/')) return new Response('Not found', { status: 404 });
       const file = Bun.file(path);
-      if (path === join(PUBLIC, 'landing.html')) return new Response(renderLanding(await file.text()), {
-        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
-      });
+      if (path === join(PUBLIC, 'landing.html')) {
+        if (request.method === 'GET') visits.record(request, server.requestIP(request)?.address ?? '');
+        return new Response(renderLanding(await file.text()), {
+          headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+        });
+      }
       // Pages and scripts change with every release; media and icons may sit in a cache for a day.
       const cache = /\.(mp4|jpg|png|svg)$/.test(path) ? 'public, max-age=86400' : 'no-store';
       return await file.exists() ? new Response(file, { headers: { 'Cache-Control': cache } }) : new Response('Not found', { status: 404 });

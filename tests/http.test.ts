@@ -73,6 +73,7 @@ suite('HTTP and WebSocket tenant boundary', () => {
     expect((await request('/ws?project=' + a, cookieB)).status).toBe(404);
     expect((await request('/ws?project=' + a)).status).toBe(401);
     expect((await request('/api/waitlist', cookieB)).status).toBe(403);
+    expect((await request('/api/visits', cookieB)).status).toBe(403);
     const list = await (await request('/api/projects', cookieB)).json();
     expect(list.map((p: any) => p.id)).toEqual([b]);
   });

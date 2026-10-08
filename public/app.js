@@ -268,6 +268,12 @@ function renderWaitlist(count) {
   $("waitlist").textContent = `Заявки: ${count ?? 0}`;
 }
 
+/** Visitors of the public page over the last week; the owner only. */
+function renderVisits(count) {
+  $("visits").hidden = !count;
+  $("visits").textContent = `Визиты за неделю: ${count ?? 0}`;
+}
+
 function renderListening() {
   document.body.classList.toggle("listening", state.listening);
   const button = $("mic");
@@ -306,6 +312,7 @@ function connect() {
         renderStatus();
         renderListening();
         renderWaitlist(message.waitlist);
+        renderVisits(message.visits);
         break;
       case "waitlist":
         renderWaitlist(message.count);
