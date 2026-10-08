@@ -77,6 +77,8 @@ export interface DirectorEvents {
   onSources(found: number, error?: string): void;
   onNext(next: string): void;
   onMetric(metric: StepMetric): void;
+  /** The speech a step is about to show the model; for tracing. */
+  onStep?(fresh: string): void;
 }
 
 const MIN_FRESH_CHARS = 30;
@@ -382,6 +384,7 @@ export class Director {
       }
 
       this.events.onStage("llm");
+      this.events.onStep?.(fresh);
       const llmStarted = performance.now();
       const decision = await this.ask(current, fresh, hits, force, stillSpeaking);
       llmMs = Math.round(performance.now() - llmStarted);

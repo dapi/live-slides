@@ -3,6 +3,7 @@
 //
 //   bun run regress                       # every fixture in fixtures/talks, real time
 //   REGRESS_SPEED=3 bun run regress intro # faster replay, fixtures whose name contains "intro"
+//   REGRESS_TRACE=1 bun run regress intro # print the model's decision on every step
 //   REGRESS=1 bun test tests/regress.test.ts
 //
 // A fixture holds phrases with the seconds they started and closed, optional excerpts from the
@@ -52,9 +53,9 @@ class FixtureSource implements Source {
   }
 }
 
-/** Word stems for a loose comparison: lower case, five letters, words of four letters or more. */
-function stems(text: string): Set<string> {
-  return new Set(text.toLowerCase().replace(/ё/g, "е").match(/[a-zа-я0-9]{4,}/g)?.map((word) => word.slice(0, 5)) ?? []);
+/** Word stems for a loose comparison: lower case, words of four letters or more cut to a few letters. */
+function stems(text: string, length = 5): Set<string> {
+  return new Set(text.toLowerCase().replace(/ё/g, "е").match(/[a-zа-я0-9]{4,}/g)?.map((word) => word.slice(0, length)) ?? []);
 }
 
 /** Does a produced title say the same thing as one of the acceptable ones? Nearly all stems must coincide. */
@@ -71,9 +72,27 @@ function points(slide: Slide): string[] {
   return [...(slide.bullets ?? []), ...(slide.left?.items ?? []), ...(slide.right?.items ?? [])];
 }
 
+/** Points the director marked as already said: everything on the slide except the forecast. */
+function saidPoints(slide: Slide): string[] {
+  return points(slide).filter((point) => !slide.predicted.includes(point));
+}
+
+/**
+ * Is a point grounded in what was said or quoted? The director compresses, so synonyms happen,
+ * but a point whose words mostly never occurred in the talk or the excerpts is invented.
+ */
+export function grounded(point: string, talk: string): boolean {
+  // Three letters: Russian inflects the ending even of short words, and a compressed point rephrases the speech.
+  const have = stems(talk, 3);
+  const need = [...stems(point, 3)];
+  if (need.length < 2) return true;
+  return need.filter((stem) => have.has(stem)).length / need.length >= 0.5;
+}
+
 /** Checks a deck against the expectation; every expected slide must appear, in order. */
 export function judge(fixture: Fixture, slides: Slide[]): string[] {
   const problems: string[] = [];
+  const talk = [...fixture.phrases.map((phrase) => phrase.text), ...(fixture.excerpts ?? []).map((excerpt) => excerpt.text)].join(" ");
   let from = 0;
   for (const expected of fixture.expect.slides) {
     const index = slides.findIndex((slide, i) => i >= from && titleMatches(slide.title, expected.title));
@@ -93,6 +112,7 @@ export function judge(fixture: Fixture, slides: Slide[]): string[] {
     if (DANGLING.has(last)) problems.push(`заголовок оборван: «${slide.title}»`);
     if (!slide.title.trim()) problems.push(`слайд ${slide.id} без заголовка`);
     if (slide.predicted.length) problems.push(`«${slide.title}»: прогноз не снят после конца речи`);
+    for (const point of saidPoints(slide)) if (!grounded(point, talk)) problems.push(`«${slide.title}»: пункт не из речи — «${point}»`);
   }
   return problems;
 }
@@ -110,7 +130,11 @@ export async function replay(fixture: Fixture, speed = Number(process.env.REGRES
   const director = new Director(fixture.excerpts?.length ? [new FixtureSource(fixture.excerpts)] : [], {
     onSlide: touch, onPaths: () => {}, onNext: () => {}, onSources: () => {},
     onStage: (stage, detail) => { busy = stage === "sources" || stage === "llm"; touch(); if (stage === "error") console.error("  ошибка:", detail); },
-    onMetric: (metric) => { metrics.push(metric); touch(); },
+    onStep: (fresh) => { if (process.env.REGRESS_TRACE) console.error(`  > ${fresh}`); },
+    onMetric: (metric) => {
+      metrics.push(metric); touch();
+      if (process.env.REGRESS_TRACE) console.error(`  ${metric.action.padEnd(6)} ${String(metric.chars).padStart(4)} зн. ${metric.llmMs} мс → «${director.slides.at(-1)?.title ?? ""}»; дальше: ${metric.next}`);
+    },
   });
   const started = performance.now();
   const pause = (seconds: number) => Bun.sleep(Math.max(0, seconds * 1000) / speed);

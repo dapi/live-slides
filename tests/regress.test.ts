@@ -21,6 +21,17 @@ test('the judge sees missing slides, wrong order, cut titles and leftover foreca
     .toEqual(['заголовок оборван: «Проблема работы с»', '«Решение»: прогноз не снят после конца речи']);
 });
 
+test('the judge flags a said point whose words never occurred in the talk', () => {
+  const phrases = [{ start: 0, end: 5, text: 'Меня несёт, я слайды не переключаю, слайд показывает что-то другое' }];
+  const fixture = { name: 't', phrases, expect: { slides: [{ title: ['Проблема'] }] } };
+  const compressed = 'Слайд показывает одно, я говорю другое';
+  const invented = 'Аудитория видит актуальный контент';
+  expect(judge(fixture, [slide('Проблема', { bullets: [compressed] })])).toEqual([]);
+  expect(judge(fixture, [slide('Проблема', { bullets: [compressed, invented] })])).toEqual([`«Проблема»: пункт не из речи — «${invented}»`]);
+  // A forecast is allowed to go beyond the speech; it is judged as a leftover instead.
+  expect(judge(fixture, [slide('Проблема', { bullets: [invented], predicted: [invented] })])).toEqual(['«Проблема»: прогноз не снят после конца речи']);
+});
+
 // The real run needs the model: REGRESS=1 bun test tests/regress.test.ts
 const suite = process.env.REGRESS ? describe : describe.skip;
 suite('recorded talks against the model', () => {
