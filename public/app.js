@@ -278,6 +278,7 @@ function renderListening() {
   document.body.classList.toggle("listening", state.listening);
   const button = $("mic");
   const elsewhere = state.listening && !mic;
+  $("voice-monitor").hidden = !mic || !state.listening;
   button.setAttribute("aria-pressed", String(state.listening && !!mic));
   button.disabled = elsewhere;
   $("mic-label").textContent = elsewhere ? "Запись идёт в другой вкладке" : state.listening ? "Остановить запись" : "Начать запись";
@@ -387,19 +388,26 @@ async function startMic() {
   }
   if (currentView !== "presentation" || activeProject !== project || ws !== socket) { stream.getTracks().forEach(track => track.stop()); return; }
   context = new AudioContext({ sampleRate: 16000 });
+  await context.resume();
   await context.audioWorklet.addModule("/pcm-worklet.js");
   if (currentView !== "presentation" || activeProject !== project || ws !== socket) { stream.getTracks().forEach(track => track.stop()); void context.close(); return; }
   const node = new AudioWorkletNode(context, "pcm");
   node.port.onmessage = ({ data }) => {
+    if (!mic || ws !== socket || mic.context !== context) return;
     if (ws === socket && mic && socket.readyState === WebSocket.OPEN) socket.send(data.pcm);
-    $("mic-level").style.setProperty("--level", Math.min(1, data.level * 6).toFixed(2));
+    const level = Math.min(1, Math.sqrt(Math.max(0, data.level - 0.004)) * 3);
+    $("mic-level").style.setProperty("--level", level.toFixed(2));
+    $("voice-monitor").style.setProperty("--level", level.toFixed(2));
+    if (data.level > 0.012) mic.lastSound = performance.now();
+    const label = performance.now() - mic.lastSound < 700 ? "Слышу звук" : "Микрофон включён";
+    if ($("voice-label").textContent !== label) $("voice-label").textContent = label;
   };
   context.createMediaStreamSource(stream).connect(node);
   // A silent path to the output keeps the worklet running in every browser.
   const mute = context.createGain();
   mute.gain.value = 0;
   node.connect(mute).connect(context.destination);
-  mic = { stream, context };
+  mic = { stream, context, lastSound: -Infinity };
 
   localStorage.setItem("engine", $("engine").value);
   send({ type: "start", engine: $("engine").value });
@@ -412,6 +420,9 @@ function releaseMic() {
   void mic.context.close();
   mic = null;
   $("mic-level").style.removeProperty("--level");
+  $("voice-monitor").hidden = true;
+  $("voice-monitor").style.removeProperty("--level");
+  $("voice-label").textContent = "Микрофон включён";
 }
 
 function toggleMic() {

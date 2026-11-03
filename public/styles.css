@@ -76,6 +76,41 @@ body.quiet .bar { opacity: 0; pointer-events: none; }
   transition: transform 0.08s linear;
 }
 
+/* This stays visible when presentation controls fade. Motion follows actual PCM energy. */
+.voice-monitor {
+  position: fixed;
+  right: 24px;
+  top: 82px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--mute);
+  font-size: 12px;
+  pointer-events: none;
+}
+.voice-orb {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--cobalt);
+  opacity: calc(.4 + var(--level, 0) * .6);
+  transform: scale(calc(1 + var(--level, 0) * .8));
+  box-shadow: 0 0 0 calc(2px + var(--level, 0) * 8px) color-mix(in srgb, var(--cobalt) 14%, transparent);
+  transition: transform 100ms ease-out, box-shadow 100ms ease-out, opacity 100ms;
+}
+@media (max-width: 720px) {
+  .voice-monitor { top: auto; bottom: 76px; right: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-orb { transform: none; box-shadow: none; transition: none; }
+}
+
 .chain {
   display: flex;
   flex-wrap: wrap;
