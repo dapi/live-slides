@@ -108,6 +108,8 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env) {
       // races the first; subscription routes occasionally stall for many seconds.
       hedgeMs: Number(env.LLM_HEDGE_MS ?? 4000),
       timeoutMs: Number(env.LLM_TIMEOUT_MS ?? 12000),
+      // Preparing a document-based draft is not on the real-time speech path.
+      openingTimeoutMs: Math.min(90000, Math.max(1000, Number(env.OPENING_TIMEOUT_MS) || 45000)),
     },
 
     // Public search of the site: published pages only, each with a public address.

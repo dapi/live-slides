@@ -9,7 +9,7 @@ const text = (value: unknown, max: number) => typeof value === 'string' ? value.
 
 export const generateOpening: OpeningGenerator = async (materials, instruction) => {
   const response = await fetch(config.llm.baseUrl + '/chat/completions', {
-    method: 'POST', signal: AbortSignal.timeout(config.llm.timeoutMs),
+    method: 'POST', signal: AbortSignal.timeout(config.llm.openingTimeoutMs),
     headers: { 'Content-Type': 'application/json', ...(config.llm.apiKey ? { Authorization: `Bearer ${config.llm.apiKey}` } : {}) },
     body: JSON.stringify({ model: config.llm.model, max_tokens: 900, temperature: config.llm.temperature, ...config.llm.extraBody,
       messages: [
@@ -80,9 +80,11 @@ export class OpeningSlides {
         opening_slide = ${JSON.stringify(slide)}::text::jsonb, opening_lease_until = NULL
         WHERE id = ${job.id} AND opening_revision = ${job.revision} AND opening_status = 'working' RETURNING id`).length > 0);
       if (saved) await this.ready(userId, job.id, slide).catch(() => { console.error('Первый слайд сохранён; обновление открытой презентации не выполнено'); });
-    } catch {
+    } catch (error) {
+      const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+      const detail = timedOut ? 'Модель не успела собрать первый слайд. Попробуйте ещё раз.' : 'Не удалось собрать первый слайд. Попробуйте ещё раз.';
       await this.db.as(userId, tx => tx`UPDATE projects SET opening_status = 'error', opening_lease_until = NULL,
-        opening_error = 'Не удалось собрать первый слайд. Попробуйте ещё раз.'
+        opening_error = ${detail}
         WHERE id = ${job.id} AND opening_revision = ${job.revision} AND opening_status = 'working'`);
     }
     return true;
