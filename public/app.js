@@ -554,6 +554,7 @@ async function navigate(view, id = "", push = true) {
   else if (!push) history.replaceState(null, "", url);
   document.body.dataset.view = view;
   $("workspace-header").hidden = view === "presentation";
+  $("settings-back").hidden = view !== "settings";
   for (const name of ["projects", "settings", "presentation", "profile"]) $(`${name}-view`).hidden = view !== name;
   $("bar").hidden = view !== "presentation";
   $("tape").hidden = true;
@@ -575,7 +576,7 @@ async function navigate(view, id = "", push = true) {
     return;
   }
   $("presentation-name").textContent = project.name;
-  $("settings-title").textContent = project.name;
+  $("settings-name").textContent = project.name;
   $("download").href = `/api/deck.md?project=${encodeURIComponent(id)}`;
   if (view === "settings") {
     $("project-settings").elements.name.value = project.name;
@@ -585,7 +586,8 @@ async function navigate(view, id = "", push = true) {
     $("opening-preview").hidden = true;
     $("opening-status").textContent = "Загружаю…";
     void loadOpening(id, true);
-    $("project-source-note").textContent = "Загруженные документы используются только в этой презентации.";
+    $("project-source-note").textContent = "";
+    $("preparation-options").open = false;
     $("settings-title").focus();
     $("documents-list").replaceChildren(el("li", "muted", "Загружаю документы…"));
     void loadDocuments(id);
@@ -608,7 +610,7 @@ async function loadDocuments(id) {
     const documents = await api(`/api/projects/${id}/documents`);
     if (id !== activeProject || currentView !== "settings") return;
     const names = { queued: "В очереди", processing: "Обрабатывается…", ready: "Готов", error: "Ошибка" };
-    $("documents-count").textContent = `Всего: ${documents.length}`;
+    $("documents-count").textContent = String(documents.length);
     const project = projectList.find(p => p.id === id);
     if (project) { project.document_count = documents.length; project.ready_count = documents.filter(d => d.status === "ready").length; }
     const rows = documents.map(doc => {
@@ -656,6 +658,12 @@ async function openCreate(event) {
   }
 }
 $("create-open").onclick = openCreate;
+$("rename-project").onclick = () => {
+  $("preparation-options").open = true;
+  const input = $("project-settings").elements.name;
+  input.focus();
+  input.select();
+};
 $("project-settings").onsubmit = async event => {
   event.preventDefault();
   const id = activeProject;
@@ -663,7 +671,7 @@ $("project-settings").onsubmit = async event => {
   try {
     await api(`/api/projects/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.elements.name.value, personalSource: personalSourceAvailable && form.elements.personalSource.checked }) });
     await loadProjects();
-    if (id === activeProject && currentView === "settings") { $("settings-title").textContent = projectList.find(p => p.id === id).name; $("project-message").textContent = "Настройки сохранены."; }
+    if (id === activeProject && currentView === "settings") { $("settings-name").textContent = projectList.find(p => p.id === id).name; $("project-message").textContent = "Настройки сохранены."; }
   } catch (error) { if (id === activeProject) $("project-message").textContent = error.message; }
   finally { button.disabled = false; }
 };
@@ -761,7 +769,7 @@ async function uploadFiles(files) {
       await api(`/api/projects/${id}/documents`, { method: "POST", body: form });
       if (id === activeProject) await loadDocuments(id);
     }
-    if (id === activeProject && currentView === "settings") $("project-message").textContent = "Документы загружены. Обработка идёт в фоне.";
+    if (id === activeProject && currentView === "settings") $("project-message").textContent = "Файлы загружены.";
   } catch (error) { if (id === activeProject && currentView === "settings") $("project-message").textContent = error.message; }
   finally {
     clearInterval(heartbeat);

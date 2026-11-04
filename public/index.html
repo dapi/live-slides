@@ -13,6 +13,7 @@
 <body data-view="projects">
   <header class="workspace-header" id="workspace-header">
     <a class="brand" href="/app/">Живые слайды</a>
+    <button class="back-link" id="settings-back" type="button" hidden>← Презентации</button>
     <details class="account-menu" data-account-menu><summary aria-label="Меню аккаунта"><span data-account-name>Аккаунт</span><span aria-hidden="true">⌄</span></summary><div class="menu-content"><button type="button" data-profile-open>Мой профиль</button><button type="button" data-logout>Выйти из аккаунта</button></div></details>
   </header>
 
@@ -22,58 +23,61 @@
     <div class="project-grid" id="project-list"></div>
   </main>
 
-  <main class="workspace" id="settings-view" aria-labelledby="settings-title" hidden>
-    <button class="back-link" id="settings-back" type="button">← Мои презентации</button>
-    <div class="page-heading"><div><p class="eyebrow">Настройки презентации</p><h1 id="settings-title" tabindex="-1"></h1><p class="muted">Подготовьте материалы, затем переходите к выступлению.</p></div><button class="primary" id="settings-present" type="button">Начать выступление →</button></div>
-    <div class="settings-grid">
+  <main class="workspace preparation" id="settings-view" aria-labelledby="settings-title" hidden>
+    <div class="page-heading"><div><h1 id="settings-title" tabindex="-1"><button type="button" id="rename-project" title="Изменить название" aria-label="Изменить название презентации"><span id="settings-name"></span><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m16 3 5 5L9 20l-6 1 1-6Z M13 6l5 5"/></svg></button></h1></div><button class="primary" id="settings-present" type="button">Начать выступление →</button></div>
+    <div class="preparation-grid">
       <section class="surface documents-section" aria-labelledby="documents-title">
-        <div class="section-heading"><h2 id="documents-title">Документы</h2><span class="muted" id="documents-count"></span></div>
+        <div class="section-heading"><h2 id="documents-title">Материалы</h2><span class="document-count" id="documents-count"></span></div>
         <div id="upload-zone" class="upload-zone">
-          <p>Перетащите сюда материалы для выступления</p>
-          <button type="button" id="upload-open">Выбрать документы</button>
+          <p>Перетащите файлы сюда</p>
+          <button type="button" id="upload-open">Добавить файлы</button>
           <input hidden id="document-files" type="file" accept=".txt,.pdf,.doc,.docx" multiple aria-label="Выбрать документы">
-          <p class="documents-hint">TXT, PDF, DOC, DOCX · до 20 МБ на файл</p>
+          <p class="documents-hint">PDF, DOCX, DOC, TXT · до 20 МБ</p>
         </div>
         <ul id="documents-list"></ul>
-        <details class="help-details"><summary>Как используются материалы</summary><p class="muted">Слайды используют готовые документы этой презентации. Обработка идёт в фоне. PDF — до 60 страниц, включая сканы; TXT — в UTF-8.</p></details>
-      </section>
-      <section class="surface" aria-labelledby="project-options-title">
-        <h2 id="project-options-title">Презентация и источники</h2>
-        <form id="project-settings" class="stack-form">
-          <label>Название презентации<input name="name" maxlength="120" required></label>
-          <p class="muted" id="project-source-note"></p>
-          <label class="checkbox-label" id="personal-source-label" hidden><input type="checkbox" name="personalSource"><span>Использовать мою базу знаний<small>Личный источник доступен только вашему аккаунту.</small></span></label>
-          <button type="submit">Сохранить настройки</button>
-        </form>
+        <details class="help-details"><summary>Какие материалы подойдут</summary><p class="muted">Отчёты, заметки и тексты по теме выступления. PDF — до 60 страниц, включая сканы; TXT — в UTF-8. Документы используются только в этой презентации.</p></details>
       </section>
       <section class="surface opening-section" aria-labelledby="opening-title">
         <div class="section-heading"><h2 id="opening-title">Первый слайд</h2><span id="opening-status" class="muted" role="status"></span></div>
-        <p class="muted">Появится автоматически, когда документы будут обработаны. Используется в начале выступления.</p>
         <div id="opening-preview" class="opening-preview" hidden></div>
         <p id="opening-message" class="muted" role="status"></p>
         <form id="opening-settings" class="stack-form">
-          <details id="opening-details" class="help-details"><summary>Инструкция для первого слайда</summary>
-            <label>Что показать на первом слайде<textarea name="prompt" rows="7" maxlength="12000" placeholder="Стандартная инструкция"></textarea></label>
-            <p class="muted">Пустое поле — стандартная инструкция. Изменения применяются после нажатия кнопки ниже.</p>
-            <div class="inline-actions"><button type="button" id="opening-fill">Вставить стандартную</button><button type="button" id="opening-clear">Вернуть стандартную</button></div>
+          <details id="opening-details" class="help-details"><summary>Изменить инструкцию</summary>
+            <label>Что показать на слайде<textarea name="prompt" rows="6" maxlength="12000" placeholder="Стандартная инструкция"></textarea></label>
+            <p class="muted">Оставьте пустым для стандартного варианта.</p>
+            <div class="inline-actions"><button type="button" id="opening-fill">Вставить стандартную</button><button type="button" id="opening-clear">Сбросить</button></div>
           </details>
-          <button type="submit" id="opening-generate">Сохранить и пересобрать слайд</button>
-        </form>
-      </section>
-      <section class="surface talk-section" aria-labelledby="talk-title">
-        <h2 id="talk-title">Речь и режиссёр</h2>
-        <form id="talk-settings" class="stack-form">
-          <label>О выступлении<textarea name="talkBrief" rows="3" placeholder="Тема, аудитория, что важно показать. Например: доклад для врачей, не техническая аудитория, цифры брать из отчёта."></textarea><small class="muted">Добавляется к инструкции режиссёра на это выступление.</small></label>
-          <label>Термины для распознавания<textarea name="speechTerms" rows="2"></textarea><small class="muted">Названия, имена и термины, которые распознаватель должен писать правильно. Пусто — стандартная подсказка.</small></label>
-          <details class="help-details" id="director-details">
-            <summary>Инструкция режиссёра</summary>
-            <label><span class="muted">Полная инструкция модели, которая ведёт слайды. Пусто — стандартная.</span><textarea name="directorPrompt" rows="12" spellcheck="false"></textarea></label>
-            <div class="inline-actions"><button type="button" id="director-fill">Вставить стандартную</button><button type="button" id="director-clear">Вернуть стандартную</button></div>
-          </details>
-          <button type="submit">Сохранить речь и режиссёра</button>
+          <button type="submit" id="opening-generate">Пересобрать</button>
         </form>
       </section>
     </div>
+    <details class="preparation-options" id="preparation-options">
+      <summary><span>Настройки выступления</span><span class="muted options-hint">Название, источники и распознавание</span></summary>
+      <div class="preparation-options-grid">
+        <section aria-labelledby="project-options-title">
+          <h2 id="project-options-title">Презентация</h2>
+          <form id="project-settings" class="stack-form">
+            <label>Название<input name="name" maxlength="120" required></label>
+            <p class="muted" id="project-source-note"></p>
+            <label class="checkbox-label" id="personal-source-label" hidden><input type="checkbox" name="personalSource"><span>Использовать мою базу знаний<small>Дополняет загруженные материалы во время выступления.</small></span></label>
+            <button type="submit">Сохранить</button>
+          </form>
+        </section>
+        <section class="talk-section" aria-labelledby="talk-title">
+          <h2 id="talk-title">Речь и содержание</h2>
+          <form id="talk-settings" class="stack-form">
+            <label>О чём и для кого<textarea name="talkBrief" rows="3" placeholder="Например: обзор результатов квартала для команды. Акцент на цифрах и следующих шагах."></textarea></label>
+            <label>Имена и термины<textarea name="speechTerms" rows="2"></textarea><small class="muted">Слова, которые важно распознать правильно.</small></label>
+            <details class="help-details" id="director-details">
+              <summary>Инструкция для живых слайдов</summary>
+              <label><span class="muted">Пустое поле — стандартная инструкция.</span><textarea name="directorPrompt" rows="10" spellcheck="false"></textarea></label>
+              <div class="inline-actions"><button type="button" id="director-fill">Вставить стандартную</button><button type="button" id="director-clear">Вернуть стандартную</button></div>
+            </details>
+            <button type="submit">Сохранить</button>
+          </form>
+        </section>
+      </div>
+    </details>
     <p id="project-message" role="status" aria-live="polite"></p>
   </main>
 
