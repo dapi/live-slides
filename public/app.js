@@ -15,6 +15,7 @@ let ws;
 let activeProject = "";
 let projectList = [];
 let documentsTimer;
+let openingTimer;
 let currentView = "projects";
 let personalSourceAvailable = false;
 let shippedPrompts = null; // the defaults from /api/prompts, loaded when the settings page needs them
@@ -539,6 +540,7 @@ async function navigate(view, id = "", push = true) {
   if (!["projects", "profile"].includes(view) && !project) { view = "projects"; id = ""; }
   if (currentView === "presentation" && (view !== "presentation" || id !== activeProject)) disconnect();
   clearTimeout(documentsTimer);
+  clearTimeout(openingTimer);
   if (id !== activeProject) {
     disconnect();
     state.slides = []; state.finals = []; state.partial = ""; state.paths = []; state.view = null; state.status = null; state.variants = false;
@@ -579,6 +581,10 @@ async function navigate(view, id = "", push = true) {
     $("project-settings").elements.name.value = project.name;
     $("project-settings").elements.personalSource.checked = project.personal_source;
     fillTalkSettings(project);
+    $("opening-settings").elements.prompt.value = "";
+    $("opening-preview").hidden = true;
+    $("opening-status").textContent = "Загружаю…";
+    void loadOpening(id, true);
     $("project-source-note").textContent = "Загруженные документы используются только в этой презентации.";
     $("settings-title").focus();
     $("documents-list").replaceChildren(el("li", "muted", "Загружаю документы…"));
@@ -613,7 +619,7 @@ async function loadDocuments(id) {
         const button = el("button", "", "Повторить"); button.type = "button";
         button.onclick = async () => {
           button.disabled = true;
-          try { await api(`/api/projects/${id}/documents/${doc.id}/retry`, { method: "POST" }); await loadDocuments(id); }
+          try { await api(`/api/projects/${id}/documents/${doc.id}/retry`, { method: "POST" }); await loadDocuments(id); await loadOpening(id); }
           catch (error) { if (id === activeProject && currentView === "settings") $("project-message").textContent = error.message; button.disabled = false; }
         };
         li.append(button);
@@ -672,6 +678,7 @@ function fillTalkSettings(project) {
 async function loadShippedPrompts() {
   try {
     shippedPrompts ??= await api("/api/prompts");
+    $("opening-settings").elements.prompt.placeholder = shippedPrompts.opening;
     const form = $("talk-settings").elements;
     form.speechTerms.placeholder = shippedPrompts.speechTerms;
     form.directorPrompt.placeholder = "Стандартная инструкция режиссёра. Чтобы править, вставьте её кнопкой ниже.";
@@ -705,11 +712,48 @@ $("talk-settings").onsubmit = async event => {
   } catch (error) { if (id === activeProject) $("project-message").textContent = error.message; }
   finally { button.disabled = false; }
 };
+async function loadOpening(id, fill = false) {
+  clearTimeout(openingTimer);
+  try {
+    const result = await api(`/api/projects/${id}/opening`);
+    if (id !== activeProject || currentView !== "settings") return;
+    if (fill) $("opening-settings").elements.prompt.value = result.prompt;
+    const names = { idle: "Жду документы", queued: "Жду обработки документов…", working: "Собираю слайд…", ready: "Готов", error: "Не удалось собрать" };
+    $("opening-status").textContent = names[result.status] ?? "";
+    $("opening-message").textContent = result.error ?? (result.status === "idle" ? "Добавьте документы — первый слайд соберётся сам." : "");
+    $("opening-preview").hidden = !result.slide;
+    if (result.slide) $("opening-preview").replaceChildren(buildSlide(result.slide, 0));
+    $("opening-generate").disabled = uploadBusy || ["queued", "working"].includes(result.status);
+    if (["queued", "working"].includes(result.status) || uploadBusy) openingTimer = setTimeout(() => loadOpening(id), 2000);
+  } catch (error) {
+    if (id === activeProject && currentView === "settings") {
+      $("opening-message").textContent = error.message;
+      openingTimer = setTimeout(() => loadOpening(id), 4000);
+    }
+  }
+}
+const openingAction = (id, body) => api(`/api/projects/${id}/opening`, {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+});
+$("opening-fill").onclick = () => { $("opening-settings").elements.prompt.value = shippedPrompts?.opening ?? ""; };
+$("opening-clear").onclick = () => { $("opening-settings").elements.prompt.value = ""; };
+$("opening-settings").onsubmit = async event => {
+  event.preventDefault();
+  const id = activeProject;
+  $("opening-generate").disabled = true;
+  try {
+    await openingAction(id, { action: "generate", prompt: event.target.elements.prompt.value });
+    await loadOpening(id);
+  } catch (error) { if (id === activeProject) { $("opening-message").textContent = error.message; $("opening-generate").disabled = false; } }
+};
 async function uploadFiles(files) {
   if (uploadBusy || !activeProject || currentView !== "settings" || !files.length) return;
   const id = activeProject; uploadBusy = true;
   $("document-files").disabled = $("upload-open").disabled = true;
+  let heartbeat;
   try {
+    await openingAction(id, { action: "hold" });
+    heartbeat = setInterval(() => { void openingAction(id, { action: "hold" }).catch(() => {}); }, 60000);
     for (const file of files) {
       if (file.size > 20 * 1024 * 1024) throw new Error("Файл должен быть не больше 20 МБ");
       if (id === activeProject) $("project-message").textContent = `Загрузка: ${file.name}`;
@@ -719,7 +763,12 @@ async function uploadFiles(files) {
     }
     if (id === activeProject && currentView === "settings") $("project-message").textContent = "Документы загружены. Обработка идёт в фоне.";
   } catch (error) { if (id === activeProject && currentView === "settings") $("project-message").textContent = error.message; }
-  finally { $("document-files").value = ""; $("document-files").disabled = $("upload-open").disabled = false; uploadBusy = false; }
+  finally {
+    clearInterval(heartbeat);
+    await openingAction(id, { action: "release" }).catch(() => {});
+    $("document-files").value = ""; $("document-files").disabled = $("upload-open").disabled = false; uploadBusy = false;
+    if (id === activeProject && currentView === "settings") void loadOpening(id);
+  }
 }
 $("upload-open").onclick = () => $("document-files").click();
 $("document-files").onchange = event => { void uploadFiles([...event.target.files]); };

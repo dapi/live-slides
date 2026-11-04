@@ -19,6 +19,7 @@ export interface Column {
 }
 
 export interface Slide {
+  origin?: 'documents';
   id: number;
   layout: Layout;
   title: string;

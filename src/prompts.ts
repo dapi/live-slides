@@ -28,6 +28,7 @@ function read(name: string): string {
  * by pointing at another directory; a presentation overrides its own copy in the database.
  */
 export const prompts = {
+  opening: read("opening-slide.md"),
   /** The slide director's system prompt. */
   director: read("director.md"),
   /** Added to the director's prompt in the paths mode. */

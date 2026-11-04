@@ -9,6 +9,7 @@ import { InputError } from './documents';
 import { Knowledge } from './knowledge';
 import { ProjectApi } from './project-api';
 import { deckMarkdown, Session, type SessionContext } from './session';
+import { OpeningSlides } from './opening-slide';
 import { Sources } from './sources';
 import { SiteSearch } from './site-search';
 import { Visits } from './visits';
@@ -22,6 +23,7 @@ const db = await Database.open();
 await db.sql`SELECT id FROM projects LIMIT 0`;
 await db.sql`SELECT has_pending_documents, username FROM app_users LIMIT 0`;
 await db.sql`SELECT director_prompt, talk_brief, speech_terms FROM projects LIMIT 0`;
+await db.sql`SELECT opening_prompt, opening_slide FROM projects LIMIT 0`;
 await db.sql`SELECT email FROM app_users LIMIT 0`;
 await db.sql`SELECT id FROM login_codes LIMIT 0`;
 await db.sql`SELECT day FROM page_visits LIMIT 0`;
@@ -36,6 +38,10 @@ if (config.llm.keyPassEntry && !process.env.LLM_API_KEY) config.llm.apiKey = awa
 type SocketData = { user: User; project: Project; room: Room; request: Request; checkedAt: number; expiresAt: number; timer?: ReturnType<typeof setInterval> };
 type Room = { key: string; session: Session; context: SessionContext; mic: ServerWebSocket<SocketData> | null; sockets: Set<ServerWebSocket<SocketData>>; busy: boolean };
 const rooms = new Map<string, Promise<Room>>();
+const openingSlides = new OpeningSlides(db, undefined, async (userId, projectId, slide) => {
+  const pending = rooms.get(`${userId}:${projectId}`);
+  if (pending) await (await pending).session.seedOpening(slide);
+});
 
 async function changeProject(user: User, project: Project, update: () => Promise<Project>): Promise<Project> {
   const key = `${user.id}:${project.id}`;
@@ -70,6 +76,7 @@ async function roomFor(user: User, project: Project): Promise<Room> {
       };
       const room = { key, context, mic: null, busy: false, sockets: new Set() } as Room;
       room.session = await Session.resumeLatest(message => broadcast(room, message), context);
+      await room.session.seedOpening(project.opening_status === 'ready' ? project.opening_slide : null);
       await room.session.activate();
       return room;
     })();
@@ -229,6 +236,8 @@ export const server = Bun.serve<SocketData>({
             if (room.mic && room.mic !== ws) break;
             room.mic = null; await room.session.stop();
             room.session = new Session(message => broadcast(room, message), undefined, room.context);
+            const currentProject = await db.project(ws.data.user.id, ws.data.project.id);
+            await room.session.seedOpening(currentProject?.opening_status === 'ready' ? currentProject.opening_slide : null);
             await room.session.activate();
             broadcast(room, await snapshot(room, ws.data.user)); break;
         }
@@ -258,4 +267,5 @@ async function joinWaitlist(request: Request, peer: string): Promise<Response> {
   return json(result, { status: result.ok ? 200 : 400 });
 }
 knowledge.start();
+openingSlides.start();
 console.log(`Живые слайды: http://${server.hostname}:${server.port}`);

@@ -46,6 +46,20 @@
           <button type="submit">Сохранить настройки</button>
         </form>
       </section>
+      <section class="surface opening-section" aria-labelledby="opening-title">
+        <div class="section-heading"><h2 id="opening-title">Первый слайд</h2><span id="opening-status" class="muted" role="status"></span></div>
+        <p class="muted">Появится автоматически, когда документы будут обработаны. Используется в начале выступления.</p>
+        <div id="opening-preview" class="opening-preview" hidden></div>
+        <p id="opening-message" class="muted" role="status"></p>
+        <form id="opening-settings" class="stack-form">
+          <details id="opening-details" class="help-details"><summary>Инструкция для первого слайда</summary>
+            <label>Что показать на первом слайде<textarea name="prompt" rows="7" maxlength="12000" placeholder="Стандартная инструкция"></textarea></label>
+            <p class="muted">Пустое поле — стандартная инструкция. Изменения применяются после нажатия кнопки ниже.</p>
+            <div class="inline-actions"><button type="button" id="opening-fill">Вставить стандартную</button><button type="button" id="opening-clear">Вернуть стандартную</button></div>
+          </details>
+          <button type="submit" id="opening-generate">Сохранить и пересобрать слайд</button>
+        </form>
+      </section>
       <section class="surface talk-section" aria-labelledby="talk-title">
         <h2 id="talk-title">Речь и режиссёр</h2>
         <form id="talk-settings" class="stack-form">

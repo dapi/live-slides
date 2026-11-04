@@ -434,3 +434,8 @@ body.quiet:has(.account-menu[open]) .bar { opacity: 1; pointer-events: auto; }
 @media (max-width: 600px) { .workspace-header { gap: 12px; } [data-account-name] { max-width: 12ch; } .presentation-account > summary { padding: 8px; font-size: 12px; } }
 
 @media (max-width: 600px) { .bar-actions { order: 1; } .presentation-account { order: 0; } }
+
+.opening-section { grid-column: 1 / -1; }
+.opening-preview { position: relative; width: 100%; max-width: 760px; aspect-ratio: 16 / 9; container-type: inline-size; border: 1px solid var(--line); overflow: hidden; border-radius: 12px; margin: 20px 0; background: var(--paper); }
+.opening-preview .slide-count { display: none; }
+.opening-section #opening-settings { margin-top: 16px; }

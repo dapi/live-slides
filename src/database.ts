@@ -2,7 +2,8 @@ import { SQL } from "bun";
 import { config, secret } from "./config";
 
 export interface User { id: string; subject: string; display_name: string }
-export interface Project { id: string; owner_id: string; name: string; personal_source: boolean; director_prompt: string; talk_brief: string; speech_terms: string }
+export interface Project { id: string; owner_id: string; name: string; personal_source: boolean; director_prompt: string; talk_brief: string; speech_terms: string;
+  opening_prompt?: string; opening_slide?: import('./director').Slide | null; opening_status?: string; opening_error?: string | null }
 
 export class Database {
   constructor(readonly sql: SQL) {}

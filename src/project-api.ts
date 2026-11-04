@@ -12,7 +12,7 @@ export class ProjectApi {
     const url = new URL(request.url);
     if (url.pathname === '/api/me') return json({ name: user.display_name, localAccount: user.subject.startsWith('local:'), personalSourceAvailable: canUsePersonal(user) && config.sources.enabled });
     // The shipped prompts, so the settings page can show what a presentation starts from.
-    if (url.pathname === '/api/prompts') return json({ director: prompts.director, speechTerms: prompts.speechTerms, limits: TALK_LIMITS });
+    if (url.pathname === '/api/prompts') return json({ opening: prompts.opening, director: prompts.director, speechTerms: prompts.speechTerms, limits: TALK_LIMITS });
     if (url.pathname === '/api/projects') {
       if (request.method === 'GET') return json(await this.db.as(user.id, tx => tx`SELECT p.id, p.name, p.personal_source, p.director_prompt, p.talk_brief, p.speech_terms,
         (SELECT count(*)::int FROM documents d WHERE d.project_id = p.id) AS document_count,
@@ -32,6 +32,29 @@ export class ProjectApi {
         });
         return json(project, { status: 201 });
       }
+    }
+    const opening = url.pathname.match(/^\/api\/projects\/([a-f0-9-]{36})\/opening$/i);
+    if (opening) {
+      const project = await this.db.project(user.id, opening[1]!);
+      if (!project) throw new InputError('Презентация не найдена', 404);
+      if (request.method === 'GET') return json({ prompt: project.opening_prompt ?? '', status: project.opening_status,
+        slide: project.opening_slide, error: project.opening_error });
+      if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+      const input = await request.json();
+      if (!input || !['hold', 'release', 'generate'].includes(input.action)) throw new InputError('Неизвестное действие');
+      if (input.action === 'hold') {
+        await this.db.as(user.id, tx => tx`UPDATE projects SET opening_upload_until = now() + interval '5 minutes',
+          opening_revision = opening_revision + 1,
+          opening_status = CASE WHEN opening_status = 'working' THEN 'queued' ELSE opening_status END
+          WHERE id = ${project.id}`);
+      } else if (input.action === 'release') {
+        await this.db.as(user.id, tx => tx`UPDATE projects SET opening_upload_until = NULL, opening_due = now() + interval '2 seconds' WHERE id = ${project.id}`);
+      } else {
+        if (typeof input.prompt !== 'string' || input.prompt.length > 12000) throw new InputError('Инструкция первого слайда: не больше 12000 символов');
+        await this.db.as(user.id, tx => tx`UPDATE projects SET opening_prompt = ${input.prompt.trim()}, opening_status = 'queued',
+          opening_revision = opening_revision + 1, opening_due = now(), opening_error = NULL WHERE id = ${project.id}`);
+      }
+      return json({ ok: true });
     }
     const settings = url.pathname.match(/^\/api\/projects\/([a-f0-9-]{36})$/i);
     if (settings) {

@@ -110,6 +110,14 @@ export class Session {
     return this.director.slides;
   }
 
+  /** A prepared draft can seed an empty talk, but never replace live speech or its slides. */
+  async seedOpening(slide?: Slide | null): Promise<void> {
+    if (!slide || this.listening || this.transcript.length || this.slides.length) return;
+    this.director.load([slide], '');
+    await this.saveDeck();
+    this.broadcast({ type: 'slide', slide, action: 'new', index: 0 });
+  }
+
   /**
    * After a restart, the deck of the latest recent session comes back on screen instead of an
    * empty stage; its files keep growing under the same session id.
