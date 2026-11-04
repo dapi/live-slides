@@ -625,19 +625,31 @@ async function loadDocuments(id) {
     if (documents.some(doc => ["queued", "processing"].includes(doc.status))) documentsTimer = setTimeout(() => loadDocuments(id), 3000);
   } catch (error) { if (id === activeProject && currentView === "settings") $("project-message").textContent = error.message; }
 }
-function openCreate() { $("create-message").textContent = ""; $("create-dialog").showModal(); }
-$("create-open").onclick = openCreate;
-$("create-close").onclick = () => $("create-dialog").close();
-$("project-create").onsubmit = async event => {
-  event.preventDefault();
-  const form = event.target;
-  const button = form.querySelector('button[type="submit"]'); button.disabled = true;
+let creatingProject = false;
+async function openCreate(event) {
+  if (creatingProject) return;
+  creatingProject = true;
+  const button = event.currentTarget;
+  const label = button.textContent;
+  button.disabled = true;
+  $("create-open").disabled = true;
+  button.textContent = "Создаю…";
+  $("projects-message").textContent = "";
   try {
-    const project = await api("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.elements.name.value }) });
-    form.reset(); $("create-dialog").close(); await loadProjects(); await navigate("settings", project.id);
-  } catch (error) { $("create-message").textContent = error.message; }
-  finally { button.disabled = false; }
-};
+    const name = `Презентация ${new Date().toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}`;
+    const project = await api("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+    projectList.push(project);
+    renderProjects();
+    await navigate("settings", project.id);
+  } catch (error) { $("projects-message").textContent = error.message; }
+  finally {
+    creatingProject = false;
+    button.disabled = false;
+    button.textContent = label;
+    $("create-open").disabled = false;
+  }
+}
+$("create-open").onclick = openCreate;
 $("project-settings").onsubmit = async event => {
   event.preventDefault();
   const id = activeProject;
